@@ -112,6 +112,49 @@ func TestListMutationAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestListPopRemovesLastValueInPlaceAndReportsEmpty(t *testing.T) {
+	listValue := value.NewList(mustNumber(t, 1), value.Null())
+	alias := listValue
+	list, ok := listValue.List()
+	if !ok {
+		t.Fatal("List() reported a non-list value")
+	}
+
+	removed, ok := list.Pop()
+	if !ok || removed.Kind() != value.NullKind {
+		t.Fatalf("Pop() = (%s, %t), want (nada, true)", value.Display(removed), ok)
+	}
+	aliasList, _ := alias.List()
+	if got := aliasList.Len(); got != 1 {
+		t.Fatalf("alias.Len() after Pop() = %d, want 1", got)
+	}
+	remaining, exists := aliasList.Get(0)
+	if !exists || value.Display(remaining) != "1" {
+		t.Fatalf("remaining value = %s, %t, want 1, true", value.Display(remaining), exists)
+	}
+
+	removed, ok = list.Pop()
+	if !ok || value.Display(removed) != "1" {
+		t.Fatalf("second Pop() = (%s, %t), want (1, true)", value.Display(removed), ok)
+	}
+	if got := aliasList.Len(); got != 0 {
+		t.Fatalf("alias.Len() after removing all values = %d, want 0", got)
+	}
+
+	removed, ok = list.Pop()
+	if ok || removed.Kind() != value.InvalidKind {
+		t.Fatalf("Pop() on empty list = (%s, %t), want (invalid, false)", value.Display(removed), ok)
+	}
+	if got := list.Len(); got != 0 {
+		t.Fatalf("Len() after empty Pop() = %d, want 0", got)
+	}
+
+	var nilList *value.List
+	if removed, ok := nilList.Pop(); ok || removed.Kind() != value.InvalidKind {
+		t.Fatalf("Pop() on nil list = (%s, %t), want (invalid, false)", value.Display(removed), ok)
+	}
+}
+
 func TestDictionaryUpdatePreservesInsertionOrder(t *testing.T) {
 	dictionaryValue := value.NewDictionary()
 	alias := dictionaryValue

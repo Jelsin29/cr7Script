@@ -227,6 +227,18 @@ func (list *List) Append(value Value) {
 	}
 }
 
+// Pop removes and returns the last value. It reports false for an empty or nil list.
+func (list *List) Pop() (Value, bool) {
+	if list == nil || len(list.values) == 0 {
+		return Value{}, false
+	}
+	last := len(list.values) - 1
+	removed := list.values[last]
+	list.values[last] = Value{}
+	list.values = list.values[:last]
+	return removed, true
+}
+
 // Snapshot returns a shallow copy in list order.
 func (list *List) Snapshot() []Value {
 	if list == nil {
