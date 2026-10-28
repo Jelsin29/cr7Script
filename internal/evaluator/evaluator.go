@@ -14,6 +14,7 @@ import (
 )
 
 const maxCallDepth = 1024
+const variadicArity = -1
 
 // RuntimeError is a source-located language failure. Runtime errors are also
 // exposed as immutable CR7Script error values.
@@ -335,10 +336,11 @@ func (function *userFunction) Call(arguments []value.Value) (value.Value, error)
 }
 
 func (interpreter *Interpreter) invoke(function value.Callable, arguments []value.Value, position lexer.Position) (value.Value, error) {
-	if len(arguments) != function.Arity() {
+	arity := function.Arity()
+	if arity != variadicArity && len(arguments) != arity {
 		return value.Value{}, interpreter.captureRuntimeError(runtimeError(
 			"AridadIncorrecta",
-			fmt.Sprintf("%s expects %d arguments, received %d", function.Name(), function.Arity(), len(arguments)),
+			fmt.Sprintf("%s expects %d arguments, received %d", function.Name(), arity, len(arguments)),
 			position,
 		))
 	}

@@ -1,6 +1,7 @@
 package evaluator_test
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/Jelsin29/cr7Script/internal/lexer"
 	"github.com/Jelsin29/cr7Script/internal/parser"
 	"github.com/Jelsin29/cr7Script/internal/resolver"
+	"github.com/Jelsin29/cr7Script/internal/stdlib"
 	"github.com/Jelsin29/cr7Script/internal/value"
 )
 
@@ -351,6 +353,29 @@ jugada outer() {
 	}
 	if frames[0].Position.Line != 5 || frames[1].Position.Line != 4 {
 		t.Errorf("stack call lines = %d, %d, want 5, 4", frames[0].Position.Line, frames[1].Position.Line)
+	}
+}
+
+func TestInterpreterInvokesVariadicStandardLibraryFunctions(t *testing.T) {
+	var output bytes.Buffer
+	library := stdlib.New(stdlib.Options{Output: &output})
+	interpreter := evaluator.NewWithRuntime(library.Prelude(), evaluator.NewExecutionContext())
+	program := parseProgramForTest(t, `jugada empty() {
+siuuu();
+}
+jugada several() {
+siuuu("one", 2, "three");
+}`)
+	if err := interpreter.Load(program); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	for _, name := range []string{"empty", "several"} {
+		if _, err := interpreter.Call(name); err != nil {
+			t.Fatalf("Call(%s) error = %v", name, err)
+		}
+	}
+	if got, want := output.String(), "\none 2 three\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }
 
