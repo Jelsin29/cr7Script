@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A truthful starting guide to the CR7Script 0.1 language design and current implementation status.">
+  <title>Getting started · CR7Script</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="index.html">CR7Script <span>/ Docs</span></a>
+    <nav class="primary-nav" aria-label="Primary navigation">
+      <a href="getting-started.html" aria-current="page">Getting started</a>
+      <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full reference</a>
+    </nav>
+  </header>
+  <div class="page-grid">
+    <aside class="sidebar" aria-label="Documentation">
+      <h2>Documentation</h2>
+      <nav aria-label="Documentation sections">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html" aria-current="page">Getting started</a>
+        <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full language reference</a>
+      </nav>
+    </aside>
+    <main class="content" id="main-content">
+      <span class="eyebrow">Read before you run</span>
+      <h1>Getting started with CR7Script</h1>
+      <p class="lead">Begin with the language contract, then explore syntax and library behavior. CR7Script is a language under active implementation, not a released command-line tool.</p>
+      <div class="notice" role="note">
+        <strong>There is no supported runner yet.</strong> The project does not currently provide a `cr7script` executable, a syntax-check command, or a REPL. Do not expect the snippets on this site to run from a shell.
+      </div>
+      <h2 id="read">A recommended reading path</h2>
+      <ol>
+        <li>Read the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">language reference</a> for exact syntax and semantics.</li>
+        <li>Review the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/architecture.md">architecture</a> to understand the interpreter pipeline and implementation boundaries.</li>
+        <li>Use the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/roadmap.md">roadmap</a> to distinguish implemented components from pending CLI work.</li>
+      </ol>
+      <h2 id="examples">How to read examples</h2>
+      <p>Code blocks are illustrative statements of the approved 0.1 contract unless a page explicitly identifies a tested Go-level example. They are not proof that a complete program has run. The proposed entry function is named <code>comandante()</code>, but no CLI currently invokes it.</p>
+      <pre class="code-block"><code>jugada comandante() {
+    leyenda dorsal = 7;
+    siuuu("Siuuu", dorsal);
+}</code></pre>
+      <h2 id="contributors">For contributors</h2>
+      <p>The implementation uses Go 1.27 or newer and the Go standard library. From a checkout with the approved Go toolchain, the current repository checks are:</p>
+      <pre class="code-block"><code>go test ./...
+go vet ./...</code></pre>
+      <p>These commands validate the Go implementation; they do not run CR7Script source files.</p>
+      <h2 id="status">Current status</h2>
+      <table class="data-table">
+        <thead><tr><th>Area</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Lexer, AST, parser, resolver</td><td>Implemented with focused tests.</td></tr>
+          <tr><td>Evaluator, runtime values, and recovery</td><td>Implemented with focused tests.</td></tr>
+          <tr><td>Local/standard module loading and standard library</td><td>Implemented with focused tests.</td></tr>
+          <tr><td>Runner, checker, REPL, CLI help/version</td><td>Not available; interface contract remains pending.</td></tr>
+        </tbody>
+      </table>
+      <p>For milestones and evidence, see the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/roadmap.md">project roadmap</a>.</p>
+      <p class="section-rule"><a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Continue to the full language reference →</a></p>
+    </main>
+    <aside class="page-toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <nav><a href="#read">Reading path</a><a href="#examples">Examples</a><a href="#contributors">Contributors</a><a href="#status">Current status</a></nav>
+    </aside>
+  </div>
+  <footer class="site-footer">
+    <p>CR7Script is an unofficial fan-inspired project. No endorsement by Cristiano Ronaldo, Real Madrid, UEFA, or other organizations is asserted.</p>
+    <p><a href="index.html">Documentation home</a></p>
+  </footer>
+</body>
+</html>

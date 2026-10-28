@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Learn CR7Script 0.1: a Spanish-first scripting language with documented syntax, modules, errors, and best practices.">
+  <title>CR7Script — Language documentation</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="index.html">CR7Script <span>/ Docs</span></a>
+    <nav class="primary-nav" aria-label="Primary navigation">
+      <a href="getting-started.html">Getting started</a>
+      <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full reference</a>
+    </nav>
+  </header>
+  <div class="page-grid">
+    <aside class="sidebar" aria-label="Documentation">
+      <h2>Documentation</h2>
+      <nav aria-label="Documentation sections">
+        <a href="index.html" aria-current="page">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full language reference</a>
+      </nav>
+    </aside>
+    <main class="content" id="main-content">
+      <span class="eyebrow">CR7Script 0.1 · Approved language design</span>
+      <h1>A scripting language with its own playbook.</h1>
+      <p class="lead">CR7Script gives programming concepts a football vocabulary while keeping evaluation strict, predictable, and documented.</p>
+      <div class="notice" role="note">
+        <strong>Implementation status:</strong> the lexer, parser, resolver, interpreter core, module loader, and standard library are implemented. The supported command-line runner, syntax checker, and REPL are not available yet. Examples on this site describe the approved language contract; they are not CLI instructions.
+      </div>
+      <div class="button-row">
+        <a class="button" href="getting-started.html">Start with the guide</a>
+        <a class="button secondary" href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Read the full reference</a>
+      </div>
+      <h2 id="example">A small play</h2>
+      <p>This example illustrates the 0.1 syntax. It has not been verified through a released command-line runner.</p>
+      <pre class="code-block"><code>jugada comandante() {
+    leyenda dorsal = 7;
+    cantera goles = 0;
+
+    entrena goles &lt; 3 {
+        goles = goles + 1;
+        siuuu("Gol", goles, "del", dorsal);
+    }
+}</code></pre>
+      <section class="section-rule" id="learn">
+        <h2>Choose a path</h2>
+        <div class="card-grid">
+          <a class="doc-card" href="getting-started.html"><strong>Get oriented</strong><span>Understand the project status and follow a safe reading path.</span></a>
+          <a class="doc-card" href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md"><strong>Read the full contract</strong><span>Look up exact syntax, semantics, diagnostics, and boundaries.</span></a>
+        </div>
+      </section>
+      <section class="section-rule" id="how-it-works">
+        <h2>How CR7Script works</h2>
+        <p>CR7Script is a tree-walking language implemented in Go 1.27 or newer. The host language is Go; CR7Script is not Go syntax and is not transpiled to Go.</p>
+        <ol class="pipeline" aria-label="Interpreter pipeline">
+          <li>UTF-8 source</li><li>Lexer</li><li>Parser / AST</li><li>Resolver</li><li>Module loader</li><li>Evaluator</li><li>Standard library</li>
+        </ol>
+        <p>The resolver checks lexical bindings before evaluation. The loader resolves local and registered modules, initializes dependencies, and detects cycles. The evaluator executes the resolved syntax tree with strict runtime checks.</p>
+      </section>
+      <section class="section-rule" id="capabilities">
+        <h2>What the 0.1 contract covers</h2>
+        <ul>
+          <li>Dynamic values with strict type checks, finite numbers, Unicode text, lists, and ordered dictionaries.</li>
+          <li>Lexical scopes, mutable and non-reassignable bindings, first-class functions, closures, recursion, and loop control.</li>
+          <li>Importer-relative local modules and a fixed registry of standard modules.</li>
+          <li>Stable resolver/runtime error codes and runtime-only recovery that preserves earlier side effects.</li>
+          <li>A standard prelude plus statistics, text, numeric, and sourced-quote modules.</li>
+        </ul>
+        <p>Classes, inheritance, macros, generics, concurrency, network access, package installation, and a security sandbox are outside 0.1.</p>
+      </section>
+      <section class="section-rule" id="sources">
+        <h2>Source documents</h2>
+        <ul>
+          <li><a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Language reference</a> — authoritative syntax and semantics.</li>
+          <li><a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/architecture.md">Architecture</a> — implementation boundaries and current status.</li>
+          <li><a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/roadmap.md">Roadmap</a> — milestones and observed evidence.</li>
+        </ul>
+      </section>
+    </main>
+    <aside class="page-toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <nav><a href="#example">A small play</a><a href="#learn">Choose a path</a><a href="#how-it-works">How it works</a><a href="#capabilities">0.1 contract</a><a href="#sources">Source documents</a></nav>
+    </aside>
+  </div>
+  <footer class="site-footer">
+    <p>Unofficial fan-inspired project. No endorsement by Cristiano Ronaldo, Real Madrid, UEFA, or other organizations is asserted.</p>
+    <p>This site is prepared for GitHub Pages from the <code>docs/</code> directory; Pages is not enabled and the site is not published.</p>
+  </footer>
+</body>
+</html>
