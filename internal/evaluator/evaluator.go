@@ -18,9 +18,21 @@ const maxCallDepth = 1024
 // RuntimeError is a source-located language failure. Runtime errors are also
 // exposed as immutable CR7Script error values.
 type RuntimeError struct {
-	code     string
-	message  string
-	position lexer.Position
+	code            string
+	message         string
+	file            string
+	position        lexer.Position
+	stack           []StackFrame
+	contextCaptured bool
+	stackCaptured   bool
+	cachedValue     value.Value
+}
+
+// StackFrame describes one active function in an error's call stack.
+type StackFrame struct {
+	Function string
+	File     string
+	Position lexer.Position
 }
 
 // Code returns the stable language error code.
@@ -29,11 +41,29 @@ func (e *RuntimeError) Code() string { return e.code }
 // Message returns the human-readable error message.
 func (e *RuntimeError) Message() string { return e.message }
 
+// File returns the source file that raised the error, if known.
+func (e *RuntimeError) File() string { return e.file }
+
 // Position returns the one-based source location.
 func (e *RuntimeError) Position() lexer.Position { return e.position }
 
+// Stack returns a copy of the innermost-first function call stack.
+func (e *RuntimeError) Stack() []StackFrame {
+	return append([]StackFrame(nil), e.stack...)
+}
+
+func (e *RuntimeError) asValue() value.Value {
+	if e.cachedValue.Kind() == value.InvalidKind {
+		e.cachedValue = value.NewError(e)
+	}
+	return e.cachedValue
+}
+
 // Error formats the code, source location, and message.
 func (e *RuntimeError) Error() string {
+	if e.file != "" {
+		return fmt.Sprintf("%s at %s:%d:%d: %s", e.code, e.file, e.position.Line, e.position.Column, e.message)
+	}
 	return fmt.Sprintf("%s at %d:%d: %s", e.code, e.position.Line, e.position.Column, e.message)
 }
 
@@ -109,17 +139,25 @@ func (environment *environment) assign(name string, runtimeValue value.Value, po
 
 // Interpreter holds one loaded module's global environment and call stack state.
 type Interpreter struct {
-	globals *environment
-	loaded  bool
-	depth   int
+	globals   *environment
+	loaded    bool
+	depth     int
+	fileName  string
+	callStack []StackFrame
 }
 
 // New creates an interpreter without loading a module.
 func New() *Interpreter { return &Interpreter{globals: newEnvironment(nil)} }
 
-// Load statically validates and initializes a module. Top-level functions are
-// installed before constants; constants then evaluate in source order.
+// Load statically validates and initializes a module without a source filename.
 func (interpreter *Interpreter) Load(program *ast.Program) error {
+	return interpreter.LoadFrom(program, "")
+}
+
+// LoadFrom initializes a module and retains its source filename for runtime
+// errors. Top-level functions initialize before constants, which then evaluate
+// in source order.
+func (interpreter *Interpreter) LoadFrom(program *ast.Program, fileName string) error {
 	if interpreter.loaded {
 		return errors.New("interpreter already has a loaded module")
 	}
@@ -130,6 +168,7 @@ func (interpreter *Interpreter) Load(program *ast.Program) error {
 		return errors.New("module imports require the module loader")
 	}
 
+	interpreter.fileName = fileName
 	interpreter.globals = newEnvironment(nil)
 	for _, declaration := range program.Declarations {
 		switch declaration := declaration.(type) {
@@ -159,7 +198,7 @@ func (interpreter *Interpreter) Load(program *ast.Program) error {
 			return err
 		}
 		if err := interpreter.globals.initialize(constant.Name, initializer, constant.Start); err != nil {
-			return err
+			return interpreter.captureRuntimeError(err)
 		}
 	}
 	interpreter.loaded = true
@@ -170,18 +209,25 @@ func (interpreter *Interpreter) Load(program *ast.Program) error {
 func (interpreter *Interpreter) Call(name string, arguments ...value.Value) (value.Value, error) {
 	callableValue, err := interpreter.globals.get(name, lexer.Position{})
 	if err != nil {
-		return value.Value{}, err
+		return value.Value{}, interpreter.captureRuntimeError(err)
 	}
 	function, ok := callableValue.Function()
 	if !ok {
-		return value.Value{}, runtimeError("TipoIncorrecto", "top-level value is not callable", lexer.Position{})
+		return value.Value{}, interpreter.captureRuntimeError(runtimeError("TipoIncorrecto", "top-level value is not callable", lexer.Position{}))
 	}
-	return interpreter.invoke(function, arguments, lexer.Position{})
+	result, err := interpreter.invoke(function, arguments, lexer.Position{})
+	return result, interpreter.captureRuntimeError(err)
 }
 
 // EvaluateExpression evaluates one expression in the loaded module environment.
 func (interpreter *Interpreter) EvaluateExpression(expression ast.Expr) (value.Value, error) {
-	return interpreter.evaluateExpression(expression, interpreter.globals)
+	result, err := interpreter.evaluateExpression(expression, interpreter.globals)
+	return result, interpreter.captureRuntimeError(err)
+}
+
+func (interpreter *Interpreter) evaluateExpression(expression ast.Expr, environment *environment) (value.Value, error) {
+	result, err := interpreter.evaluateExpressionRaw(expression, environment)
+	return result, interpreter.captureRuntimeError(err)
 }
 
 type userFunction struct {
@@ -198,13 +244,46 @@ func (function *userFunction) Call(arguments []value.Value) (value.Value, error)
 
 func (interpreter *Interpreter) invoke(function value.Callable, arguments []value.Value, position lexer.Position) (value.Value, error) {
 	if len(arguments) != function.Arity() {
-		return value.Value{}, runtimeError(
+		return value.Value{}, interpreter.captureRuntimeError(runtimeError(
 			"AridadIncorrecta",
 			fmt.Sprintf("%s expects %d arguments, received %d", function.Name(), function.Arity(), len(arguments)),
 			position,
-		)
+		))
 	}
-	return function.Call(arguments)
+	if position.Line == 0 {
+		if userFunction, ok := function.(*userFunction); ok {
+			position = userFunction.declaration.Start
+		}
+	}
+	interpreter.callStack = append(interpreter.callStack, StackFrame{
+		Function: function.Name(),
+		File:     interpreter.fileName,
+		Position: position,
+	})
+	defer func() { interpreter.callStack = interpreter.callStack[:len(interpreter.callStack)-1] }()
+	result, err := function.Call(arguments)
+	return result, interpreter.captureRuntimeError(err)
+}
+
+func (interpreter *Interpreter) captureRuntimeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var runtimeFailure *RuntimeError
+	if !errors.As(err, &runtimeFailure) {
+		return err
+	}
+	if !runtimeFailure.contextCaptured {
+		runtimeFailure.file = interpreter.fileName
+		runtimeFailure.contextCaptured = true
+	}
+	if !runtimeFailure.stackCaptured {
+		for index := len(interpreter.callStack) - 1; index >= 0; index-- {
+			runtimeFailure.stack = append(runtimeFailure.stack, interpreter.callStack[index])
+		}
+		runtimeFailure.stackCaptured = true
+	}
+	return runtimeFailure
 }
 
 func (interpreter *Interpreter) callUserFunction(function *userFunction, arguments []value.Value) (value.Value, error) {
@@ -390,7 +469,19 @@ func (interpreter *Interpreter) executeStatement(statement ast.Stmt, environment
 		}
 		return flow{}, runtimeError("TipoIncorrecto", "falta expects text or an error value", statement.Start)
 	case *ast.TryCatchStmt:
-		return flow{}, fmt.Errorf("evaluator: recovery execution is not implemented")
+		result, err := interpreter.executeBlock(statement.Protected, environment)
+		if err == nil {
+			return result, nil
+		}
+		err = interpreter.captureRuntimeError(err)
+		var runtimeFailure *RuntimeError
+		if !errors.As(err, &runtimeFailure) {
+			return flow{}, err
+		}
+		handlerEnvironment := newEnvironment(environment)
+		handlerEnvironment.define(statement.ErrorName, runtimeFailure.asValue(), false)
+		interpreter.prepareDeclarations(handlerEnvironment, statement.Handler.Statements)
+		return interpreter.executeStatements(statement.Handler.Statements, handlerEnvironment)
 	default:
 		return flow{}, fmt.Errorf("evaluator: unsupported statement %T", statement)
 	}
@@ -423,7 +514,7 @@ func (interpreter *Interpreter) executeAssignment(statement *ast.AssignmentStmt,
 	}
 }
 
-func (interpreter *Interpreter) evaluateExpression(expression ast.Expr, environment *environment) (value.Value, error) {
+func (interpreter *Interpreter) evaluateExpressionRaw(expression ast.Expr, environment *environment) (value.Value, error) {
 	switch expression := expression.(type) {
 	case *ast.IdentifierExpr:
 		return environment.get(expression.Name, expression.Start)
@@ -754,6 +845,9 @@ func propertyValue(object value.Value, name string, position lexer.Position) (va
 			}
 			return value.NewText(errorValue.Error()), nil
 		case "archivo":
+			if diagnostic, ok := errorValue.(*RuntimeError); ok {
+				return value.NewText(diagnostic.File()), nil
+			}
 			return value.NewText(""), nil
 		case "linea":
 			if diagnostic, ok := errorValue.(*RuntimeError); ok {

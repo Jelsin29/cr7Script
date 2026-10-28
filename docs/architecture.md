@@ -1,6 +1,6 @@
 # CR7Script proposed architecture
 
-> **Status: approved design; implementation in progress.** The owner approved the Go 1.27+ baseline and the previously open semantic decisions. The lexer, AST, parser, resolver, and core evaluator/value layer are implemented with focused tests. Runtime recovery, module loading, standard-library behavior, and the CLI remain in progress.
+> **Status: approved design; implementation in progress.** The owner approved the Go 1.27+ baseline and the previously open semantic decisions. The lexer, AST, parser, resolver, core evaluator/value layer, and runtime recovery are implemented with focused tests. Module loading, standard-library behavior, and the CLI remain in progress.
 >
 > Documentation: English · Language vocabulary: Spanish-first
 >
@@ -18,14 +18,14 @@ This document proposes implementation boundaries for the [0.1 language reference
 
 The approved 0.1 baseline specifies a tree-walking interpreter: source is tokenized, parsed into an AST, resolved, loaded with its dependencies, and evaluated. This describes responsibilities, not a requirement that all modules complete one phase globally before the next begins. The loader coordinates frontend processing of dependencies before initialization.
 
-The lexer, AST, parser, resolver, and core evaluator/value layer have implementations with focused tests. Recovery, module loading, standard-library, and CLI behavior remain proposals until their acceptance evidence is observed:
+The lexer, AST, parser, resolver, core evaluator/value layer, and runtime recovery have implementations with focused tests. Module loading, standard-library, and CLI behavior remain proposals until their acceptance evidence is observed:
 
 - Lexer: Tokens, comments, literals, locations — implemented
 - AST: Syntax tree nodes for declarations, statements, and expressions — implemented
 - Parser: Grammar, precedence, AST construction — implemented
 - Resolver: Scope mapping, invalid control flow, binding rules — implemented with focused tests
 - Loader: Canonical paths, dependency cycles, module cache — not implemented
-- Evaluator: Core expressions, calls, mutation, loops, closures, and runtime checks — implemented with focused tests; recovery remains pending
+- Evaluator: Core expressions, calls, mutation, loops, closures, runtime checks, and runtime-only recovery — implemented with focused tests; CLI stack presentation remains pending
 - Value layer: Runtime types, equality, collection identity, display, ordered collections, and Unicode-scalar text indexing — implemented with focused tests
 - Standard library: Native function contracts
 - CLI: Arguments, exit status, streams, presentation
@@ -44,7 +44,7 @@ The proposed runner initializes the entry module, then calls exactly one zero-ar
 
 ## Proposed runtime invariants
 
-These constraints derive from the approved language reference. Evaluator/value behavior marked implemented above has focused test coverage; module and recovery behavior remains pending.
+These constraints derive from the approved language reference. Evaluator/value behavior and runtime recovery marked implemented above have focused test coverage; module loading and CLI behavior remain pending.
 
 - Dynamic values use strict runtime type checks, with eager left-to-right evaluation and boolean short-circuiting.
 - Lexical block scope supports closures; fresh loop bindings preserve per-iteration captures. `leyenda` prevents rebinding, not collection mutation.
@@ -65,7 +65,7 @@ These constraints derive from the approved language reference. Evaluator/value b
 | `internal/parser/` | Approved grammar, precedence, and AST construction (implemented). |
 | `internal/resolver/` | Lexical scope mapping and static validation (implemented with focused tests). |
 | `internal/loader/` | Local/standard module resolution, cycles, cache, and initialization coordination. |
-| `internal/evaluator/`, `internal/value/` | Core AST execution, environments, closures, runtime values, equality, and display (implemented with focused tests); recovery and complete source-file error context remain pending. |
+| `internal/evaluator/`, `internal/value/` | Core AST execution, environments, closures, runtime values, equality, display, recovery, and runtime error source/stack metadata (implemented with focused tests); module integration and CLI stack presentation remain pending. |
 | `internal/stdlib/` | Core prelude and proposed standard modules, including `rueda_de_prensa` for immutable sourced quote constants. |
 | `internal/cli/` | Argument handling, streams, status, and REPL presentation. |
 | `tests/conformance/`, `tests/cli/`, `tests/fixtures/` | Language contract cases, process-level checks, and source/diagnostic fixtures. |
@@ -81,7 +81,7 @@ Lexer, parser, resolver, and core evaluator/value tests have been implemented an
 |---|---|---|
 | Frontend unit tests | Tokens, comments, literals, locations, grammar, precedence, and invalid syntax. | Token/AST expectations and exact diagnostic fixtures. |
 | Resolver tests | Shadowing, binding rules, closures, and invalid control flow. | Public frontend results, including phase expectations after owner decisions. |
-| Evaluator/value conformance | Strict types, evaluation order, arithmetic boundaries, identity, mutation, iteration snapshots, display, and recovery. | Focused Go tests parse source and exercise interpreter/value APIs for expected values and stable runtime error codes; recovery and retained-side-effect cases remain future evidence. |
+| Evaluator/value conformance | Strict types, evaluation order, arithmetic boundaries, identity, mutation, iteration snapshots, display, and recovery. | Focused Go tests parse source and exercise interpreter/value APIs for expected values, stable runtime error codes, recovered error fields, and retained side effects; CLI stack formatting remains future evidence. |
 | Loader integration | Canonical paths, aliases, cache identity, dependency initialization, and cycle rejection. | Local multi-module fixtures and expected import-chain diagnostics. |
 | Native library tests | Arity, type checks, Unicode behavior, empty inputs, mutation contracts, and quote-data fidelity. | Cases derived from the reference for each prelude/standard function; verify every Q1–Q7 export is exact immutable text, importing the module emits nothing, and the unverified “losh dosh” lead is not exported. |
 | CLI end-to-end tests | Runner, checker, REPL, help/version, entry validation, and stream separation. | Exact stdout, stderr, and exit-status assertions once CLI syntax and `check` guarantees are specified. |

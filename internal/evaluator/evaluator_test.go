@@ -7,6 +7,7 @@ import (
 	"github.com/Jelsin29/cr7Script/internal/evaluator"
 	"github.com/Jelsin29/cr7Script/internal/lexer"
 	"github.com/Jelsin29/cr7Script/internal/parser"
+	"github.com/Jelsin29/cr7Script/internal/resolver"
 	"github.com/Jelsin29/cr7Script/internal/value"
 )
 
@@ -205,6 +206,153 @@ func TestCallChecksExactArity(t *testing.T) {
 	expectRuntimeError(t, err, "AridadIncorrecta")
 }
 
+func TestTryCatchExposesUserErrorAndPreservesEffects(t *testing.T) {
+	interpreter := loadSourceFrom(t, `jugada recover() {
+cantera count = 0;
+remontada {
+count = count + 1;
+falta "boom";
+} var failure {
+devuelve count == 1 y failure.codigo == "FaltaDelUsuario" y failure.mensaje == "boom" y failure.archivo == "fixture.cr7" y failure.linea == 5 y failure.columna == 1;
+}
+}`, "fixture.cr7")
+	result, err := interpreter.Call("recover")
+	if err != nil {
+		t.Fatalf("Call(recover) error = %v", err)
+	}
+	boolean, ok := result.Boolean()
+	if !ok || !boolean {
+		t.Fatalf("Call(recover) = %s (%s), want gol", value.Display(result), value.TypeLabel(result))
+	}
+}
+
+func TestRethrownRuntimeErrorPreservesIdentity(t *testing.T) {
+	result := callSource(t, `
+		jugada rethrow() {
+			remontada { falta "boom"; } var original {
+				remontada { falta original; } var repeated {
+					devuelve original == repeated;
+				}
+			}
+		}
+	`, "rethrow")
+	boolean, ok := result.Boolean()
+	if !ok || !boolean {
+		t.Fatalf("Call(rethrow) = %s (%s), want gol", value.Display(result), value.TypeLabel(result))
+	}
+}
+
+func TestRecoveryDoesNotCatchReturnBreakOrContinue(t *testing.T) {
+	interpreter := loadSource(t, `
+		jugada returnFromProtected() {
+			remontada { devuelve 7; } var failure { devuelve 0; }
+		}
+		jugada loopSignals() {
+			cantera count = 0;
+			entrena count < 4 {
+				count = count + 1;
+				remontada {
+					si count == 2 { siguiente; }
+					si count == 4 { vestuario; }
+				} var failure { devuelve 100; }
+			}
+			devuelve count;
+		}
+	`)
+	for _, test := range []struct {
+		name string
+		want float64
+	}{
+		{name: "returnFromProtected", want: 7},
+		{name: "loopSignals", want: 4},
+	} {
+		result, err := interpreter.Call(test.name)
+		if err != nil {
+			t.Fatalf("Call(%s) error = %v", test.name, err)
+		}
+		expectNumber(t, result, test.want)
+	}
+}
+
+func TestRecoveryDoesNotCatchStaticErrorsAndCatchBindingIsImmutable(t *testing.T) {
+	cases := []struct {
+		name   string
+		source string
+		code   string
+	}{
+		{
+			name: "undefined name is resolved before execution",
+			source: `jugada invalid() {
+remontada { devuelve missing; } var failure { devuelve nada; }
+}`,
+			code: "NombreNoDefinido",
+		},
+		{
+			name: "catch binding cannot be reassigned",
+			source: `jugada invalid() {
+remontada { falta "boom"; } var failure { failure = nada; }
+}`,
+			code: "ReasignacionDeLeyenda",
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			tokens, err := lexer.Scan(test.source)
+			if err != nil {
+				t.Fatalf("lexer.Scan() error = %v", err)
+			}
+			program, err := parser.Parse(tokens)
+			if err != nil {
+				t.Fatalf("parser.Parse() error = %v", err)
+			}
+			interpreter := evaluator.New()
+			err = interpreter.Load(program)
+			var diagnostic *resolver.Diagnostic
+			if !errors.As(err, &diagnostic) {
+				t.Fatalf("Load() error = %T (%v), want *resolver.Diagnostic", err, err)
+			}
+			if diagnostic.Code != test.code {
+				t.Fatalf("diagnostic.Code = %q, want %q", diagnostic.Code, test.code)
+			}
+		})
+	}
+}
+
+func TestRuntimeErrorCarriesFileLocationAndInnermostFirstStack(t *testing.T) {
+	interpreter := loadSourceFrom(t, `jugada leaf() {
+ devuelve 7 / 0;
+}
+jugada outer() {
+ devuelve leaf();
+}`, "fixture.cr7")
+	_, err := interpreter.Call("outer")
+	expectRuntimeError(t, err, "DivisionPorCero")
+	var runtimeError *evaluator.RuntimeError
+	if !errors.As(err, &runtimeError) {
+		t.Fatalf("error type = %T, want *evaluator.RuntimeError", err)
+	}
+	if runtimeError.File() != "fixture.cr7" {
+		t.Errorf("RuntimeError.File() = %q, want fixture.cr7", runtimeError.File())
+	}
+	position := runtimeError.Position()
+	if position.Line != 2 || position.Column != 11 {
+		t.Errorf("RuntimeError.Position() = %d:%d, want 2:11", position.Line, position.Column)
+	}
+	frames := runtimeError.Stack()
+	if len(frames) != 2 {
+		t.Fatalf("RuntimeError.Stack() has %d frames, want 2: %#v", len(frames), frames)
+	}
+	if frames[0].Function != "leaf" || frames[1].Function != "outer" {
+		t.Errorf("stack functions = %q, %q, want leaf, outer", frames[0].Function, frames[1].Function)
+	}
+	if frames[0].File != "fixture.cr7" || frames[1].File != "fixture.cr7" {
+		t.Errorf("stack files = %q, %q, want fixture.cr7 for both frames", frames[0].File, frames[1].File)
+	}
+	if frames[0].Position.Line != 5 || frames[1].Position.Line != 4 {
+		t.Errorf("stack call lines = %d, %d, want 5, 4", frames[0].Position.Line, frames[1].Position.Line)
+	}
+}
+
 func callSource(t *testing.T, source, functionName string) value.Value {
 	t.Helper()
 	interpreter := loadSource(t, source)
@@ -213,6 +361,23 @@ func callSource(t *testing.T, source, functionName string) value.Value {
 		t.Fatalf("Call(%s) error = %v", functionName, err)
 	}
 	return result
+}
+
+func loadSourceFrom(t *testing.T, source, fileName string) *evaluator.Interpreter {
+	t.Helper()
+	tokens, err := lexer.Scan(source)
+	if err != nil {
+		t.Fatalf("lexer.Scan() error = %v", err)
+	}
+	program, err := parser.Parse(tokens)
+	if err != nil {
+		t.Fatalf("parser.Parse() error = %v", err)
+	}
+	interpreter := evaluator.New()
+	if err := interpreter.LoadFrom(program, fileName); err != nil {
+		t.Fatalf("Interpreter.LoadFrom() error = %v", err)
+	}
+	return interpreter
 }
 
 func loadSource(t *testing.T, source string) *evaluator.Interpreter {
