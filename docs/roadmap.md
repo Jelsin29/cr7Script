@@ -1,6 +1,6 @@
 # CR7Script proposed delivery roadmap
 
-> **Status: approved design; implementation in progress.** Milestone scopes and acceptance evidence below remain plans unless an outcome is explicitly verified. The owner approved Go 1.27+ and resolved the four previously open decisions; implementation begins with the lexer.
+> **Status: approved design; implementation in progress.** Milestone scopes and acceptance evidence below remain plans unless an outcome is explicitly verified. The owner approved Go 1.27+ and resolved the four previously open decisions. Implementation began with the lexer; loader and standard-library integration now have focused and repository-wide Go verification, while the runner/checker remains pending.
 >
 > Documentation: English · Language vocabulary: Spanish-first
 >
@@ -28,11 +28,13 @@ Milestone scopes and acceptance criteria are planned; mark implementation outcom
 | M6 — Mr. Champions | Integrate module loading/cache and native contracts: core prelude, `mr_champions`, `relato`, `marcador`, and `rueda_de_prensa`, without adding library scope. The latter exposes exactly the seven catalogued quote constants as immutable text; quotes are data, not new syntax. | M5 error model; M4 callable values; M1 approved constant-initialization rules and reviewed quote provenance. | Proposed local-module fixtures demonstrate canonical paths, symlink identity, rejected cycles with import chains, once-per-process initialization, exports, and no automatic imported entry call. Native-function tests cover arity/types, empty inputs, Unicode, finite arithmetic, display, and documented mutation/non-mutation contracts. Quote-module tests compare all seven exports to the Q1–Q7 source excerpts, verify Q7 retains its colon, ensure importing emits no output, keep `HALA_MADRID` distinct from the `hala_madrid()` greeting and `mr_champions.soy_el_mejor(numbers)`, and confirm the unverified “losh dosh” lead has no export. |
 | M7 — Matchday | Integrate the proposed runner, syntax checker, REPL, help, and version interfaces; review examples and release-facing 0.1 documentation against the implemented subset. | M2–M6 language/runtime/library evidence; M1 approved `check` guarantees and a specified CLI interface. | Proposed process-level tests assert exact stdout, stderr, and exit status for success and failure, with checker guarantees and REPL entry behavior tested explicitly. The reference quick example must produce its exact expected output on an actual runner before claiming it works. Record conformance results and remaining limitations rather than claiming untested completion. |
 
+**Observed implementation evidence (M6 / T7):** the local-module loader and standard library are implemented; focused tests cover importer-relative and canonical paths, symlink/cache identity, dependency initialization, cycle diagnostics, the 17-function prelude, four registered modules, and exact Q1–Q7 immutable quote exports without implicit output. Repository-wide `go test ./...` and `go vet ./...` pass. This does not establish the runner/checker or prove that reference examples execute; M7 remains pending.
+
 These scopes organize work, not language additions. Cross-cutting value, source-location, and error plumbing may be needed before its milestone's full contract is accepted. Any change to an approved language rule requires a separately reviewed specification change, not an undocumented implementation shortcut.
 
 ## Proposed verification and completion gates
 
-No executable validation has occurred under this roadmap. The future evidence plan is:
+Observed validation so far: focused tests cover the implemented M2–M6 packages, and repository-wide `go test ./...` plus `go vet ./...` pass. No runner or CLI exists yet, so language-reference examples and process-level M7 behavior remain unverified. Continue using these evidence gates:
 
 - **At each milestone:** run focused deterministic tests for its public behavior, retain regression checks for shared behavior, and record observed results with the implementation change.
 - **Across boundaries:** check resolver/evaluator error phases, loader initialization, native values, and CLI presentation against the same reference rather than divergent package assumptions.
@@ -65,4 +67,4 @@ Tree-walking remains the proposed initial execution model. Bytecode is a possibl
 
 ## Next review
 
-Review the [approved language decisions](language-reference.md#owner-approved-implementation-decisions) and [architecture baseline](architecture.md#owner-approved-decisions) together. The first implementation slice is the lexer; examples remain unverified until tests or a runner demonstrate them.
+Review the [approved language decisions](language-reference.md#owner-approved-implementation-decisions) and [architecture baseline](architecture.md#owner-approved-decisions) together. The next implementation slice is the runner/checker; examples remain unverified until the runner demonstrates their behavior.
