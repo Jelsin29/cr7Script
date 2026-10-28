@@ -67,6 +67,13 @@ func (e *RuntimeError) Error() string {
 	return fmt.Sprintf("%s at %d:%d: %s", e.code, e.position.Line, e.position.Column, e.message)
 }
 
+// NewRuntimeError creates a runtime failure for native functions. When the
+// native callable returns it without a source position, the interpreter uses
+// the call expression's location.
+func NewRuntimeError(code, message string, position lexer.Position) *RuntimeError {
+	return runtimeError(code, message, position)
+}
+
 func runtimeError(code, message string, position lexer.Position) *RuntimeError {
 	return &RuntimeError{code: code, message: message, position: position}
 }
@@ -137,39 +144,93 @@ func (environment *environment) assign(name string, runtimeValue value.Value, po
 	return runtimeError("NombreNoDefinido", "undefined name", position)
 }
 
-// Interpreter holds one loaded module's global environment and call stack state.
-type Interpreter struct {
-	globals   *environment
-	loaded    bool
+// ExecutionContext shares call depth and source stack across module interpreters.
+type ExecutionContext struct {
 	depth     int
-	fileName  string
 	callStack []StackFrame
 }
 
-// New creates an interpreter without loading a module.
-func New() *Interpreter { return &Interpreter{globals: newEnvironment(nil)} }
+// NewExecutionContext creates a context for one interpreter execution.
+func NewExecutionContext() *ExecutionContext { return &ExecutionContext{} }
+
+// Interpreter holds one loaded module's global environment and runtime context.
+type Interpreter struct {
+	globals     *environment
+	loaded      bool
+	fileName    string
+	prelude     map[string]value.Value
+	execution   *ExecutionContext
+	exportNames map[string]struct{}
+}
+
+// New creates an interpreter without loading a module or installing a prelude.
+func New() *Interpreter { return NewWithRuntime(nil, NewExecutionContext()) }
+
+// NewWithRuntime creates an interpreter with host-provided prelude values and a
+// shared execution context. Module loaders use one context for all modules.
+func NewWithRuntime(prelude map[string]value.Value, execution *ExecutionContext) *Interpreter {
+	if execution == nil {
+		execution = NewExecutionContext()
+	}
+	copiedPrelude := make(map[string]value.Value, len(prelude))
+	for name, item := range prelude {
+		copiedPrelude[name] = item
+	}
+	return &Interpreter{
+		globals:   newEnvironment(nil),
+		prelude:   copiedPrelude,
+		execution: execution,
+	}
+}
 
 // Load statically validates and initializes a module without a source filename.
 func (interpreter *Interpreter) Load(program *ast.Program) error {
 	return interpreter.LoadFrom(program, "")
 }
 
-// LoadFrom initializes a module and retains its source filename for runtime
-// errors. Top-level functions initialize before constants, which then evaluate
-// in source order.
+// LoadFrom initializes a module without imports and retains its source filename
+// for runtime errors. Functions initialize before source-order constants.
 func (interpreter *Interpreter) LoadFrom(program *ast.Program, fileName string) error {
+	return interpreter.load(program, fileName, nil, false)
+}
+
+// LoadFromWithImports initializes a module with resolved, read-only import
+// namespaces. The import map must contain exactly one module value per import.
+func (interpreter *Interpreter) LoadFromWithImports(program *ast.Program, fileName string, imports map[string]value.Value) error {
+	return interpreter.load(program, fileName, imports, true)
+}
+
+func (interpreter *Interpreter) load(program *ast.Program, fileName string, imports map[string]value.Value, allowImports bool) error {
 	if interpreter.loaded {
 		return errors.New("interpreter already has a loaded module")
 	}
 	if err := resolver.Resolve(program); err != nil {
 		return err
 	}
-	if len(program.Imports) != 0 {
+	if !allowImports && len(program.Imports) != 0 {
 		return errors.New("module imports require the module loader")
+	}
+	if len(imports) != len(program.Imports) {
+		return errors.New("import bindings do not match module imports")
+	}
+	for _, declaration := range program.Imports {
+		moduleValue, exists := imports[declaration.Alias]
+		if !exists {
+			return fmt.Errorf("module loader omitted import %q", declaration.Alias)
+		}
+		if _, ok := moduleValue.Module(); !ok {
+			return fmt.Errorf("module loader supplied a non-module value for %q", declaration.Alias)
+		}
 	}
 
 	interpreter.fileName = fileName
 	interpreter.globals = newEnvironment(nil)
+	for name, item := range interpreter.prelude {
+		interpreter.globals.define(name, item, false)
+	}
+	for _, declaration := range program.Imports {
+		interpreter.globals.define(declaration.Alias, imports[declaration.Alias], false)
+	}
 	for _, declaration := range program.Declarations {
 		switch declaration := declaration.(type) {
 		case *ast.ConstDecl:
@@ -201,8 +262,39 @@ func (interpreter *Interpreter) LoadFrom(program *ast.Program, fileName string) 
 			return interpreter.captureRuntimeError(err)
 		}
 	}
+	interpreter.exportNames = make(map[string]struct{})
+	for _, declaration := range program.Declarations {
+		switch declaration := declaration.(type) {
+		case *ast.ConstDecl:
+			interpreter.exportNames[declaration.Name] = struct{}{}
+		case *ast.FunctionDecl:
+			interpreter.exportNames[declaration.Name] = struct{}{}
+		}
+	}
 	interpreter.loaded = true
 	return nil
+}
+
+// Exports returns a read-only live view of this module's declared constants and
+// functions. It is unavailable until module initialization succeeds.
+func (interpreter *Interpreter) Exports() (value.Module, bool) {
+	if !interpreter.loaded {
+		return nil, false
+	}
+	return &moduleNamespace{interpreter: interpreter, names: interpreter.exportNames}, true
+}
+
+type moduleNamespace struct {
+	interpreter *Interpreter
+	names       map[string]struct{}
+}
+
+func (module *moduleNamespace) Get(name string) (value.Value, bool) {
+	if _, exported := module.names[name]; !exported {
+		return value.Value{}, false
+	}
+	result, err := module.interpreter.globals.get(name, lexer.Position{})
+	return result, err == nil
 }
 
 // Call invokes a named top-level function with the supplied arguments.
@@ -255,14 +347,16 @@ func (interpreter *Interpreter) invoke(function value.Callable, arguments []valu
 			position = userFunction.declaration.Start
 		}
 	}
-	interpreter.callStack = append(interpreter.callStack, StackFrame{
+	interpreter.execution.callStack = append(interpreter.execution.callStack, StackFrame{
 		Function: function.Name(),
 		File:     interpreter.fileName,
 		Position: position,
 	})
-	defer func() { interpreter.callStack = interpreter.callStack[:len(interpreter.callStack)-1] }()
+	defer func() {
+		interpreter.execution.callStack = interpreter.execution.callStack[:len(interpreter.execution.callStack)-1]
+	}()
 	result, err := function.Call(arguments)
-	return result, interpreter.captureRuntimeError(err)
+	return result, interpreter.captureRuntimeErrorAt(err, position)
 }
 
 func (interpreter *Interpreter) captureRuntimeError(err error) error {
@@ -278,20 +372,30 @@ func (interpreter *Interpreter) captureRuntimeError(err error) error {
 		runtimeFailure.contextCaptured = true
 	}
 	if !runtimeFailure.stackCaptured {
-		for index := len(interpreter.callStack) - 1; index >= 0; index-- {
-			runtimeFailure.stack = append(runtimeFailure.stack, interpreter.callStack[index])
+		for index := len(interpreter.execution.callStack) - 1; index >= 0; index-- {
+			runtimeFailure.stack = append(runtimeFailure.stack, interpreter.execution.callStack[index])
 		}
 		runtimeFailure.stackCaptured = true
 	}
 	return runtimeFailure
 }
 
+func (interpreter *Interpreter) captureRuntimeErrorAt(err error, position lexer.Position) error {
+	if err != nil && position.Line != 0 {
+		var runtimeFailure *RuntimeError
+		if errors.As(err, &runtimeFailure) && runtimeFailure.position.Line == 0 {
+			runtimeFailure.position = position
+		}
+	}
+	return interpreter.captureRuntimeError(err)
+}
+
 func (interpreter *Interpreter) callUserFunction(function *userFunction, arguments []value.Value) (value.Value, error) {
-	if interpreter.depth >= maxCallDepth {
+	if interpreter.execution.depth >= maxCallDepth {
 		return value.Value{}, runtimeError("LimiteDeEjecucion", "maximum function call depth reached", function.declaration.Start)
 	}
-	interpreter.depth++
-	defer func() { interpreter.depth-- }()
+	interpreter.execution.depth++
+	defer func() { interpreter.execution.depth-- }()
 
 	functionEnvironment := newEnvironment(function.closure)
 	for index, parameter := range function.declaration.Parameters {

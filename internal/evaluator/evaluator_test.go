@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Jelsin29/cr7Script/internal/ast"
 	"github.com/Jelsin29/cr7Script/internal/evaluator"
 	"github.com/Jelsin29/cr7Script/internal/lexer"
 	"github.com/Jelsin29/cr7Script/internal/parser"
@@ -351,6 +352,172 @@ jugada outer() {
 	if frames[0].Position.Line != 5 || frames[1].Position.Line != 4 {
 		t.Errorf("stack call lines = %d, %d, want 5, 4", frames[0].Position.Line, frames[1].Position.Line)
 	}
+}
+
+func TestLoadFromStillRequiresTheModuleLoaderForImports(t *testing.T) {
+	program := parseProgramForTest(t, `fichar "./dependency.cr7" como dependency;`)
+	err := evaluator.New().LoadFrom(program, "main.cr7")
+	if err == nil || err.Error() != "module imports require the module loader" {
+		t.Fatalf("LoadFrom() error = %v, want the existing module-loader requirement", err)
+	}
+}
+
+func TestInjectedPreludeAndImportedModuleBindingsAreReadOnlyExports(t *testing.T) {
+	prelude := map[string]value.Value{
+		"numero": value.NewFunction(testCallable{name: "numero", arity: 1, result: numberForTest(t, 7)}),
+	}
+	interpreter := evaluator.NewWithRuntime(prelude, evaluator.NewExecutionContext())
+	program := parseProgramForTest(t, `fichar "dependency" como dependency;
+leyenda configured = dependency.answer;
+jugada run() { devuelve numero("7") + configured; }`)
+	imports := map[string]value.Value{
+		"dependency": value.NewModule(testModule{"answer": numberForTest(t, 35)}),
+	}
+	if err := interpreter.LoadFromWithImports(program, "main.cr7", imports); err != nil {
+		t.Fatalf("LoadFromWithImports() error = %v", err)
+	}
+	result, err := interpreter.Call("run")
+	if err != nil {
+		t.Fatalf("Call(run) error = %v", err)
+	}
+	expectNumber(t, result, 42)
+
+	exports, ok := interpreter.Exports()
+	if !ok {
+		t.Fatal("Exports() reports an unloaded module")
+	}
+	for _, name := range []string{"configured", "run"} {
+		if _, exists := exports.Get(name); !exists {
+			t.Errorf("module exports omit %q", name)
+		}
+	}
+	for _, name := range []string{"dependency", "native"} {
+		if _, exists := exports.Get(name); exists {
+			t.Errorf("module exports unexpectedly include %q", name)
+		}
+	}
+
+	invalid := evaluator.New()
+	invalidProgram := parseProgramForTest(t, `fichar "dependency" como dependency;
+jugada run() { dependency = nada; devuelve nada; }`)
+	err = invalid.LoadFromWithImports(invalidProgram, "main.cr7", imports)
+	var diagnostic *resolver.Diagnostic
+	if !errors.As(err, &diagnostic) || diagnostic.Code != "ReasignacionDeLeyenda" {
+		t.Fatalf("LoadFromWithImports() error = %T (%v), want immutable-import diagnostic", err, err)
+	}
+}
+
+func TestInterpretersShareCrossModuleRuntimeStack(t *testing.T) {
+	context := evaluator.NewExecutionContext()
+	dependency := evaluator.NewWithRuntime(nil, context)
+	dependencyProgram := parseProgramForTest(t, `jugada fail() {
+ devuelve 7 / 0;
+}`)
+	if err := dependency.LoadFrom(dependencyProgram, "dependency.cr7"); err != nil {
+		t.Fatalf("dependency.LoadFrom() error = %v", err)
+	}
+
+	main := evaluator.NewWithRuntime(nil, context)
+	mainProgram := parseProgramForTest(t, `fichar "dependency" como dependency;
+jugada run() {
+ devuelve dependency.fail();
+}`)
+	dependencyExports, ok := dependency.Exports()
+	if !ok {
+		t.Fatal("dependency.Exports() reports an unloaded module")
+	}
+	if err := main.LoadFromWithImports(mainProgram, "main.cr7", map[string]value.Value{
+		"dependency": value.NewModule(dependencyExports),
+	}); err != nil {
+		t.Fatalf("main.LoadFromWithImports() error = %v", err)
+	}
+	_, err := main.Call("run")
+	expectRuntimeError(t, err, "DivisionPorCero")
+	var runtimeError *evaluator.RuntimeError
+	if !errors.As(err, &runtimeError) {
+		t.Fatalf("error type = %T, want *evaluator.RuntimeError", err)
+	}
+	if runtimeError.File() != "dependency.cr7" {
+		t.Errorf("RuntimeError.File() = %q, want dependency.cr7", runtimeError.File())
+	}
+	frames := runtimeError.Stack()
+	if len(frames) != 2 || frames[0].Function != "fail" || frames[1].Function != "run" {
+		t.Fatalf("RuntimeError.Stack() = %#v, want innermost-first fail, run", frames)
+	}
+	if frames[0].File != "main.cr7" || frames[1].File != "main.cr7" {
+		t.Errorf("stack call-site files = %q, %q, want main.cr7", frames[0].File, frames[1].File)
+	}
+}
+
+func TestNativeRuntimeErrorUsesCallSite(t *testing.T) {
+	prelude := map[string]value.Value{
+		"entrevista": value.NewFunction(testCallable{
+			name:  "entrevista",
+			arity: 1,
+			err:   evaluator.NewRuntimeError("EntradaSalida", "native failure", lexer.Position{}),
+		}),
+	}
+	interpreter := evaluator.NewWithRuntime(prelude, evaluator.NewExecutionContext())
+	if err := interpreter.LoadFrom(parseProgramForTest(t, `jugada run() {
+  devuelve entrevista("prompt");
+}`), "main.cr7"); err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+	_, err := interpreter.Call("run")
+	expectRuntimeError(t, err, "EntradaSalida")
+	var runtimeError *evaluator.RuntimeError
+	if !errors.As(err, &runtimeError) {
+		t.Fatalf("error type = %T, want *evaluator.RuntimeError", err)
+	}
+	position := runtimeError.Position()
+	if position.Line != 2 || position.Column != 12 {
+		t.Errorf("RuntimeError.Position() = %d:%d, want 2:12", position.Line, position.Column)
+	}
+	if runtimeError.File() != "main.cr7" {
+		t.Errorf("RuntimeError.File() = %q, want main.cr7", runtimeError.File())
+	}
+}
+
+type testModule map[string]value.Value
+
+func (module testModule) Get(name string) (value.Value, bool) {
+	result, exists := module[name]
+	return result, exists
+}
+
+type testCallable struct {
+	name   string
+	arity  int
+	result value.Value
+	err    error
+}
+
+func (function testCallable) Name() string { return function.name }
+func (function testCallable) Arity() int   { return function.arity }
+func (function testCallable) Call([]value.Value) (value.Value, error) {
+	return function.result, function.err
+}
+
+func numberForTest(t *testing.T, number float64) value.Value {
+	t.Helper()
+	result, err := value.NewNumber(number)
+	if err != nil {
+		t.Fatalf("value.NewNumber(%v) error = %v", number, err)
+	}
+	return result
+}
+
+func parseProgramForTest(t *testing.T, source string) *ast.Program {
+	t.Helper()
+	tokens, err := lexer.Scan(source)
+	if err != nil {
+		t.Fatalf("lexer.Scan() error = %v", err)
+	}
+	program, err := parser.Parse(tokens)
+	if err != nil {
+		t.Fatalf("parser.Parse() error = %v", err)
+	}
+	return program
 }
 
 func callSource(t *testing.T, source, functionName string) value.Value {
