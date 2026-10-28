@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Practical CR7Script best practices for strict values, finite numbers, deliberate mutation, module boundaries, recovery, and current limitations.">
+  <title>Best practices and limitations · CR7Script</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="index.html">CR7Script <span>/ Docs</span></a>
+    <nav class="primary-nav" aria-label="Primary navigation">
+      <a href="getting-started.html">Getting started</a>
+      <a href="language-tour.html">Language tour</a>
+      <a href="modules-and-errors.html">Modules &amp; errors</a>
+      <a href="standard-library.html">Standard library</a>
+      <a href="best-practices.html" aria-current="page">Best practices</a>
+      <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full reference</a>
+    </nav>
+  </header>
+  <div class="page-grid">
+    <aside class="sidebar" aria-label="Documentation">
+      <h2>Documentation</h2>
+      <nav aria-label="Documentation sections">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="language-tour.html">Language tour</a>
+        <a href="modules-and-errors.html">Modules &amp; errors</a>
+        <a href="standard-library.html">Standard library</a>
+        <a href="best-practices.html" aria-current="page">Best practices &amp; limitations</a>
+        <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full language reference</a>
+      </nav>
+    </aside>
+    <main class="content" id="main-content">
+      <span class="eyebrow">Practical guidance · explicit boundaries</span>
+      <h1>Make every conversion, mutation, and recovery deliberate.</h1>
+      <p class="lead">CR7Script combines dynamic values with strict checks. Prefer small functions, explicit ownership of shared collections, and narrow recovery blocks rather than relying on implicit conversions or hidden side effects.</p>
+      <div class="notice" role="note">
+        <strong>Approved design, incomplete tooling.</strong> The frontend, evaluator/value layer, runtime recovery, loader, and standard library have implementations with focused tests. No supported runner, checker, REPL, or CLI is available yet. All examples on this page are illustrative contract examples, not verified program executions or evidence of production readiness.
+      </div>
+
+      <section class="section-rule" id="values">
+        <h2>Keep value types explicit</h2>
+        <ul>
+          <li>Use boolean expressions for conditions and <code>y</code>/<code>o</code>; numbers and text are not truthy. <code>si 7 { ... }</code> is invalid.</li>
+          <li>Use <code>numero(text)</code> for decimal input and <code>texto(value)</code> for display conversion. Invalid numeric text raises <code>ConversionInvalida</code>.</li>
+          <li><code>+</code> accepts two numbers or two texts, not a mixed pair. Write <code>"CR" + texto(7)</code>, not <code>"CR" + 7</code>.</li>
+          <li>Lists and dictionaries compare by identity, not recursively by contents. Do not use <code>==</code> as a deep-content comparison.</li>
+          <li>Text length and indexes count Unicode scalar values, not bytes or user-perceived characters. A displayed character may contain multiple scalars.</li>
+        </ul>
+        <pre class="code-block"><code>jugada etiqueta(dorsal) {
+    exige(tipo(dorsal) == "numero", "Expected a number");
+    devuelve "CR" + texto(dorsal);
+}</code></pre>
+        <p>Keep input validation close to the boundary where a value enters a function. <code>exige</code> raises <code>FaltaDelUsuario</code> when its boolean condition is false; it does not introduce static types.</p>
+      </section>
+
+      <section class="section-rule" id="numbers">
+        <h2>Plan for finite binary64 arithmetic</h2>
+        <p>Every <code>numero</code> is a finite IEEE-754 binary64 value. Decimal fractions need not be exact. Integers are exactly representable through magnitude <code>2^53 - 1</code> (9,007,199,254,740,991); larger integer values may be rounded. This is not a suitable representation for exact financial arithmetic.</p>
+        <ul>
+          <li>Do not treat display conversion or rounding as a way to restore precision already lost in a calculation.</li>
+          <li>A non-finite literal such as <code>1e999</code> is rejected during frontend analysis with <code>NumeroNoFinito</code>, before execution. A runtime recovery block cannot catch that analysis failure.</li>
+          <li>Arithmetic producing infinity or NaN raises <code>NumeroNoFinito</code>; division and remainder by zero raise <code>DivisionPorCero</code>.</li>
+          <li><code>7 / 2</code> is <code>3.5</code>, not integer division. Remainder uses truncation toward zero: <code>-7 % 3</code> is <code>-1</code>.</li>
+          <li>Use non-negative safe integers for indexes and sleep durations. Range bounds must be safe integers; <code>rango</code> allocates a list, so large ranges consume memory.</li>
+        </ul>
+      </section>
+
+      <section class="section-rule" id="mutation">
+        <h2>Use non-reassignable bindings without assuming deep immutability</h2>
+        <p>Prefer <code>leyenda</code> when the binding should not change, and <code>cantera</code> when reassignment is intentional. Neither declaration clones a collection. Function arguments also retain collection identity.</p>
+        <pre class="code-block"><code>jugada preparar() {
+    leyenda plantilla = [7];
+    cantera compartida = plantilla;
+    convoca(compartida, 10);
+    // plantilla and compartida still refer to the same changed list.
+    devuelve plantilla;
+}</code></pre>
+        <ul>
+          <li>Document which functions mutate their list or dictionary arguments. <code>convoca</code>, <code>banquillo</code>, and index assignment change collections in place.</li>
+          <li><code>chilena(list)</code> returns a new shallow reversed list; nested collections are still shared. <code>hat_trick(value)</code> repeats the same reference three times for reference values, not three independent clones.</li>
+          <li>Use <code>convoca</code> to append. Assigning at a list's length is an out-of-bounds error, not an append operation.</li>
+          <li>Use <code>consulta(dict, key, fallback)</code> when a missing key is expected. A present key containing <code>nada</code> returns <code>nada</code>, not the fallback.</li>
+          <li>Iteration takes a shallow snapshot at loop entry. Do not expect later changes to collection membership to change that traversal; nested referenced values can still change.</li>
+        </ul>
+      </section>
+
+      <section class="section-rule" id="modules">
+        <h2>Keep module boundaries small and dependencies visible</h2>
+        <p>Place imports first, at module level. Use a registered standard-module name or a local path starting with <code>./</code> or <code>../</code> and ending in <code>.cr7</code>. Relative paths resolve from the importing file, not the shell's current directory. Absolute imports are rejected and imports never download packages.</p>
+        <ul>
+          <li>Put executable statements and mutable bindings inside functions. Module-level declarations are imports, functions, and initialized <code>leyenda</code> bindings.</li>
+          <li>Top-level functions and constants are exported. Keep the public surface intentional; the 0.1 contract has no private-export syntax.</li>
+          <li>Top-level functions initialize first, then constants in source order. Reading a later constant raises the resolver error <code>NombreSinInicializar</code>.</li>
+          <li>Dependencies initialize first, once per process. Cycles are rejected with <code>FichajeCircular</code>; avoid mutually dependent modules.</li>
+          <li>Import aliases and module namespaces are read-only, but exported collection references can remain mutable. A read-only namespace is not a deep-immutability boundary.</li>
+          <li>An imported <code>comandante</code> is an ordinary exported function; importing does not automatically call it.</li>
+        </ul>
+        <p>See <a href="modules-and-errors.html">modules and errors</a> for initialization and error-phase details.</p>
+      </section>
+
+      <section class="section-rule" id="recovery">
+        <h2>Recover narrowly; never assume rollback</h2>
+        <p>Use <code>remontada</code> around a runtime operation with a meaningful fallback. Inspect <code>error.codigo</code> rather than parsing human-readable messages. Rethrow unexpected errors with <code>falta error;</code>.</p>
+        <pre class="code-block"><code>jugada leer_numero(entrada) {
+    remontada {
+        devuelve numero(entrada);
+    } var error {
+        si error.codigo == "ConversionInvalida" {
+            devuelve nada;
+        }
+        falta error;
+    }
+}</code></pre>
+        <p>This illustrative function deliberately uses <code>nada</code> as its invalid-input result; callers must handle that result explicitly.</p>
+        <ul>
+          <li>Recovery catches runtime errors only, not lexical, parsing, resolution, or module-loading failures.</li>
+          <li>Output already printed and collections already mutated stay changed after failure. Validate before mutation where practical; a handler is not a transaction.</li>
+          <li>Recovery does not retry automatically. Repeating a failed operation may repeat earlier effects.</li>
+          <li>Return, break, and continue are control flow, not catchable errors. There is no <code>finally</code> in 0.1.</li>
+          <li>The handler binding and error fields are read-only. Use <code>codigo</code>, <code>mensaje</code>, <code>archivo</code>, <code>linea</code>, and <code>columna</code> for structured context; CLI stack presentation remains pending.</li>
+        </ul>
+      </section>
+
+      <section class="section-rule" id="limits">
+        <h2>Do not confuse path validation with isolation</h2>
+        <div class="notice" role="note"><strong>Not a security sandbox.</strong> CR7Script is learning-oriented. Canonical paths, rejected absolute imports, module caching, and cycle detection do not make untrusted code safe to execute.</div>
+        <p>Local imports permit <code>../</code> and resolve symlinks; these rules do not confine dependencies to a project directory. Review imported source and its dependencies as code, not harmless data. Do not rely on the language runtime to isolate untrusted programs or protect the host.</p>
+        <p>Execution is single-threaded with host-managed memory. There is no async or parallel syntax. Large collections and ranges consume memory, and <code>calma</code> blocks execution. A call-depth error is not a general resource-isolation guarantee.</p>
+        <p>The approved 0.1 scope excludes classes, inheritance, operator overloading, macros, generics, threads, network access, package installation, JIT, native code generation, and self-hosting. Slices and destructuring are also unavailable. The standard library offers no filesystem or network API; local module loading still accesses the filesystem.</p>
+      </section>
+
+      <section class="section-rule" id="provenance">
+        <h2>Keep cultural references and evidence separate</h2>
+        <p>Football-themed programming meanings are invented, not quotations or endorsements. The <code>rueda_de_prensa</code> constants are sourced text data, not executable syntax, and do not print automatically.</p>
+        <p>Retain the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md#verified-spoken-phrase-catalog">Q1–Q7 catalog's provenance notes</a> when reusing excerpts: published quotations and available recording pages are different kinds of evidence; availability does not establish independent playback or transcription. This guide does not independently re-audit the owner-provided sources.</p>
+        <ul>
+          <li>Q1 is an excerpt; Q2's professional context must not become a medical claim.</li>
+          <li>Q3 retains the source description's wording rather than merging headline variants. Q4 is a Juventus-era historical boast, not current statistics.</li>
+          <li>Q5 relies on attributed published speech; Q6 is a stated opinion, not an established ranking.</li>
+          <li>Q7 comes from a public presentation, not an interview. Its quoted colon differs deliberately from the ellipsis in the adapted <code>hala_madrid()</code> greeting.</li>
+        </ul>
+        <p>Export identifiers are language adaptations, not words attributed to the speaker. Do not add unverified viral phrases as authenticated quotes, exports, or syntax.</p>
+      </section>
+
+      <section class="section-rule" id="status">
+        <h2>Read the contract before assuming a tool exists</h2>
+        <p>The <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">approved language reference</a> defines semantics. The <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/architecture.md">architecture</a> and <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/roadmap.md">roadmap</a> distinguish implemented packages and observed tests from pending integration. The reference's opening implementation summary is older than those status documents; it is not the current package inventory.</p>
+        <p>The proposed checker validates syntax and lexical bindings without execution; that guarantee is not proof of runtime success. The runner, checker, REPL, help, and version interfaces remain unavailable. No installation or execution command is supplied here, and documented examples must not be treated as executed fixtures.</p>
+      </section>
+    </main>
+    <aside class="page-toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <nav aria-label="Page sections">
+        <a href="#values">Value discipline</a>
+        <a href="#numbers">Numeric precision</a>
+        <a href="#mutation">Deliberate mutation</a>
+        <a href="#modules">Module boundaries</a>
+        <a href="#recovery">Recovery without rollback</a>
+        <a href="#limits">Trust and limitations</a>
+        <a href="#provenance">Quote provenance</a>
+        <a href="#status">Tooling status</a>
+      </nav>
+    </aside>
+  </div>
+  <footer class="site-footer">
+    <p>CR7Script is an unofficial fan-inspired project. No endorsement by Cristiano Ronaldo, Real Madrid, UEFA, or other organizations is asserted.</p>
+    <p><a href="index.html">Documentation home</a> · <a href="modules-and-errors.html">Modules &amp; errors</a> · <a href="standard-library.html">Standard library</a></p>
+  </footer>
+</body>
+</html>

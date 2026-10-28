@@ -70,11 +70,12 @@ The quote module contains only the documented excerpts and preserves their prove
 
 ## Documentation
 
-- [Documentation site source](docs/index.html) — overview and documentation hub; additional guides are being added in this branch.
+- [Documentation site source](docs/index.html) — overview and navigation hub for the site guides.
 - [Getting started and current status](docs/getting-started.html) — explains what is and is not available today.
 - [Language tour](docs/language-tour.html) — guided syntax, values, control flow, functions, and collections.
 - [Modules and errors](docs/modules-and-errors.html) — imports, initialization, recovery, and stable error codes.
 - [Standard library](docs/standard-library.html) — all 17 prelude functions and four registered modules.
+- [Best practices and limitations](docs/best-practices.html) — practical guidance with explicit 0.1 boundaries.
 - [Language reference](docs/language-reference.md) — authoritative 0.1 contract.
 - [Architecture](docs/architecture.md) — interpreter pipeline and implementation boundaries.
 - [Roadmap](docs/roadmap.md) — milestones and observed verification evidence.
