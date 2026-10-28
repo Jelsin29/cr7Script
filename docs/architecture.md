@@ -1,6 +1,6 @@
 # CR7Script proposed architecture
 
-> **Status: approved design; implementation in progress.** The owner approved the Go 1.27+ baseline and the previously open semantic decisions; implementation begins with the lexer. Later milestones remain unimplemented until their acceptance evidence is observed.
+> **Status: approved design; implementation in progress.** The owner approved the Go 1.27+ baseline and the previously open semantic decisions. The lexer, AST, and parser are implemented with focused tests; later milestones remain unimplemented until their acceptance evidence is observed.
 >
 > Documentation: English · Language vocabulary: Spanish-first
 >
@@ -18,10 +18,11 @@ This document proposes implementation boundaries for the [0.1 language reference
 
 The approved 0.1 baseline specifies a tree-walking interpreter: source is tokenized, parsed into an AST, resolved, loaded with its dependencies, and evaluated. This describes responsibilities, not a requirement that all modules complete one phase globally before the next begins. The loader coordinates frontend processing of dependencies before initialization.
 
-All responsibilities below are **proposed, not implemented**; their labels preserve the blueprint:
+The lexer, AST, parser, and focused frontend tests are implemented; the remaining responsibilities below are proposals, not implemented:
 
-- Lexer: Tokens, comments, literals, locations
-- Parser: Grammar, precedence, AST
+- Lexer: Tokens, comments, literals, locations — implemented
+- AST: Syntax tree nodes for declarations, statements, and expressions — implemented
+- Parser: Grammar, precedence, AST construction — implemented
 - Resolver: Scope mapping, invalid control flow, binding rules
 - Loader: Canonical paths, dependency cycles, module cache
 - Evaluator: Expressions, calls, mutation, runtime checks
@@ -54,12 +55,14 @@ These are draft constraints from the language reference, not implemented guarant
 
 ## Proposed repository layout
 
-Every code and test path in this table is a **proposal, not an existing implementation**. Package names organize responsibilities only; they do not approve Go or settle language semantics.
+`internal/lexer/`, `internal/ast/`, and `internal/parser/` exist; the lexer implements tokenization, literals, comments, and locations, while the AST and parser implement the approved syntax tree and grammar with focused tests. Every other code and test path in this table remains a proposal. Package names organize responsibilities only; they do not settle language semantics.
 
 | Proposed path | Purpose |
 |---|---|
 | `cmd/cr7script/` | Thin CLI entry point, if Go is confirmed. |
-| `internal/lexer/`, `internal/parser/`, `internal/ast/` | Source locations, tokens, parsing, and syntax tree. |
+| `internal/ast/` | Syntax tree nodes for declarations, statements, and expressions (implemented). |
+| `internal/lexer/` | Source locations, tokens, comments, and literals (implemented). |
+| `internal/parser/` | Approved grammar, precedence, and AST construction (implemented). |
 | `internal/resolver/` | Lexical scope mapping and static validation. |
 | `internal/loader/` | Local/standard module resolution, cycles, cache, and initialization coordination. |
 | `internal/evaluator/`, `internal/value/` | AST execution, environments, closures, runtime values, and errors. |
@@ -72,7 +75,7 @@ The documentation set is [language reference](language-reference.md), this archi
 
 ## Proposed test layers
 
-No tests or test commands in this plan have been implemented or executed. Future acceptance evidence should distinguish expected results from observed results.
+Lexer and parser unit tests have been implemented and run for representative frontend cases. Resolver, evaluator/value, loader, standard-library, and CLI layers remain proposals; the test plan below describes future acceptance evidence and does not claim those layers exist.
 
 | Proposed layer | Contract to exercise | Proposed evidence |
 |---|---|---|
