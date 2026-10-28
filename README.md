@@ -70,8 +70,9 @@ The quote module contains only the documented excerpts and preserves their prove
 
 ## Documentation
 
-- [Documentation site source](docs/index.html) — the overview; the remaining guides are being added in this branch.
+- [Documentation site source](docs/index.html) — overview and documentation hub; additional guides are being added in this branch.
 - [Getting started and current status](docs/getting-started.html) — explains what is and is not available today.
+- [Language tour](docs/language-tour.html) — guided syntax, values, control flow, functions, and collections.
 - [Language reference](docs/language-reference.md) — authoritative 0.1 contract.
 - [Architecture](docs/architecture.md) — interpreter pipeline and implementation boundaries.
 - [Roadmap](docs/roadmap.md) — milestones and observed verification evidence.

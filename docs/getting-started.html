@@ -13,6 +13,7 @@
     <a class="brand" href="index.html">CR7Script <span>/ Docs</span></a>
     <nav class="primary-nav" aria-label="Primary navigation">
       <a href="getting-started.html" aria-current="page">Getting started</a>
+      <a href="language-tour.html">Language tour</a>
       <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full reference</a>
     </nav>
   </header>
@@ -22,6 +23,7 @@
       <nav aria-label="Documentation sections">
         <a href="index.html">Overview</a>
         <a href="getting-started.html" aria-current="page">Getting started</a>
+        <a href="language-tour.html">Language tour</a>
         <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full language reference</a>
       </nav>
     </aside>
@@ -34,7 +36,8 @@
       </div>
       <h2 id="read">A recommended reading path</h2>
       <ol>
-        <li>Read the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">language reference</a> for exact syntax and semantics.</li>
+        <li>Start with the <a href="language-tour.html">language tour</a> for guided syntax and core concepts.</li>
+        <li>Use the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">language reference</a> for exact semantics and edge cases.</li>
         <li>Review the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/architecture.md">architecture</a> to understand the interpreter pipeline and implementation boundaries.</li>
         <li>Use the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/roadmap.md">roadmap</a> to distinguish implemented components from pending CLI work.</li>
       </ol>
@@ -51,7 +54,7 @@ go vet ./...</code></pre>
       <p>These commands validate the Go implementation; they do not run CR7Script source files.</p>
       <h2 id="status">Current status</h2>
       <table class="data-table">
-        <thead><tr><th>Area</th><th>Status</th></tr></thead>
+        <thead><tr><th scope="col">Area</th><th scope="col">Status</th></tr></thead>
         <tbody>
           <tr><td>Lexer, AST, parser, resolver</td><td>Implemented with focused tests.</td></tr>
           <tr><td>Evaluator, runtime values, and recovery</td><td>Implemented with focused tests.</td></tr>

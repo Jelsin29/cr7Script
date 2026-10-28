@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A guided, contract-grounded tour of CR7Script 0.1 syntax, values, operators, control flow, functions, and collections.">
+  <title>Language tour · CR7Script</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="index.html">CR7Script <span>/ Docs</span></a>
+    <nav class="primary-nav" aria-label="Primary navigation">
+      <a href="getting-started.html">Getting started</a>
+      <a href="language-tour.html" aria-current="page">Language tour</a>
+      <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full reference</a>
+    </nav>
+  </header>
+  <div class="page-grid">
+    <aside class="sidebar" aria-label="Documentation">
+      <h2>Documentation</h2>
+      <nav aria-label="Documentation sections">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="language-tour.html" aria-current="page">Language tour</a>
+        <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full language reference</a>
+      </nav>
+    </aside>
+    <main class="content" id="main-content">
+      <span class="eyebrow">Guided tour · CR7Script 0.1</span>
+      <h1>Learn the language one rule at a time.</h1>
+      <p class="lead">CR7Script uses Spanish-first keywords and a football vocabulary. The language contract is intentionally strict: expressions have explicit types, names have lexical scope, and the evaluator does not guess what you meant.</p>
+      <div class="notice" role="note">
+        <strong>Examples are illustrative.</strong> The approved language rules and interpreter core exist, but a supported runner, checker, and REPL are not available. Nothing on this page is a shell command or a claim that a CR7Script example was executed.
+      </div>
+
+      <section class="section-rule" id="program">
+        <h2>A program is built from declarations and blocks</h2>
+        <p>A function declaration uses <code>jugada</code>; braces form a block; simple statements end with semicolons. The proposed entry function is named <code>comandante()</code>, but no current CLI invokes it.</p>
+        <pre class="code-block"><code>jugada comandante() {
+    cantera goles = 0;
+
+    entrena goles &lt; 3 {
+        goles = goles + 1;
+        siuuu("Gol", goles);
+    }
+}</code></pre>
+        <p>Indentation is conventional rather than syntactic. The source contract uses UTF-8, case-sensitive identifiers, double-quoted strings, and <code>//</code> or non-nesting <code>/* ... */</code> comments. There is no automatic semicolon insertion.</p>
+      </section>
+
+      <section class="section-rule" id="values">
+        <h2>Values have explicit types</h2>
+        <p>CR7Script is dynamically typed, but operations check their operands at runtime. Conditions require booleans; values are never treated as true or false just because they are non-empty or non-zero.</p>
+        <table class="data-table">
+          <thead><tr><th scope="col">Value</th><th scope="col">Language form</th><th scope="col">Key rule</th></tr></thead>
+          <tbody>
+            <tr><td>Number</td><td><code>7</code>, <code>3.5</code></td><td>Finite IEEE-754 binary64; integer precision is exact only through 2<sup>53</sup> − 1.</td></tr>
+            <tr><td>Text</td><td><code>"Cristiano"</code></td><td>Immutable Unicode text; length and indexing count Unicode scalar values.</td></tr>
+            <tr><td>Boolean</td><td><code>gol</code>, <code>fuera</code></td><td>Required for conditions and boolean operators.</td></tr>
+            <tr><td>Null</td><td><code>nada</code></td><td>The type label returned by <code>tipo</code> is <code>nulo</code>.</td></tr>
+            <tr><td>Collections</td><td><code>[7, 10]</code>, <code>{"goles": 3}</code></td><td>Lists and string-key dictionaries are mutable references.</td></tr>
+            <tr><td>Other values</td><td>Functions, modules, errors</td><td>Functions are first-class; imported namespaces and error fields are read-only.</td></tr>
+          </tbody>
+        </table>
+        <p>Non-finite numeric literals are rejected during front-end analysis with <code>NumeroNoFinito</code> before program execution. Arithmetic results that are infinite or NaN also raise that code.</p>
+      </section>
+
+      <section class="section-rule" id="bindings">
+        <h2>Bindings are mutable or non-reassignable</h2>
+        <pre class="code-block"><code>cantera goles = 0;
+goles = goles + 1;
+
+leyenda dorsal = 7;
+// dorsal = 10;  // ReasignacionDeLeyenda</code></pre>
+        <p><code>cantera</code> creates a mutable binding. <code>leyenda</code> prevents rebinding that name; it does not freeze a list or dictionary stored in the binding. Assignment updates the nearest visible name and never creates a new variable.</p>
+        <pre class="code-block"><code>leyenda plantilla = [7];
+convoca(plantilla, 10);
+cantera otra = plantilla;
+otra[0] = 9;</code></pre>
+        <p>Both names refer to the same list, so changing an element through <code>otra</code> is visible through <code>plantilla</code>. Same-scope redeclarations are errors; nested blocks may shadow outer names.</p>
+      </section>
+
+      <section class="section-rule" id="operators">
+        <h2>Operators have defined precedence</h2>
+        <p>From higher to lower precedence, the core order is:</p>
+        <table class="data-table">
+          <thead><tr><th scope="col">Level</th><th scope="col">Operators</th><th scope="col">Rule</th></tr></thead>
+          <tbody>
+            <tr><td>Postfix</td><td><code>f(...)</code>, <code>x[i]</code>, <code>m.name</code></td><td>Calls, indexing, and module/error property access.</td></tr>
+            <tr><td>Unary</td><td><code>-</code>, <code>no</code></td><td>Numeric negation; boolean NOT.</td></tr>
+            <tr><td>Multiplicative</td><td><code>*</code>, <code>/</code>, <code>%</code></td><td>Numbers only; division is floating-point.</td></tr>
+            <tr><td>Additive</td><td><code>+</code>, <code>-</code></td><td><code>+</code> accepts two numbers or two texts, not a mixed pair.</td></tr>
+            <tr><td>Relational</td><td><code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></td><td>Compare numbers; chained comparisons are rejected.</td></tr>
+            <tr><td>Equality</td><td><code>==</code>, <code>!=</code></td><td>Equality follows type and identity rules.</td></tr>
+            <tr><td>Boolean AND</td><td><code>y</code></td><td>Short-circuits and returns a boolean.</td></tr>
+            <tr><td>Boolean OR</td><td><code>o</code></td><td>Short-circuits and returns a boolean.</td></tr>
+          </tbody>
+        </table>
+        <pre class="code-block"><code>cantera listo = goles &gt;= 3 y no lesionado;
+cantera etiqueta = "CR" + texto(7);</code></pre>
+        <p>Comparisons cannot be chained. Write <code>1 &lt; x y x &lt; 10</code>. Assignment is a statement, not an expression; there is no <code>++</code> or <code>+=</code> in 0.1.</p>
+      </section>
+
+      <section class="section-rule" id="control-flow">
+        <h2>Branches and loops use boolean conditions</h2>
+        <pre class="code-block"><code>si goles == 3 {
+    siuuu("Hat-trick");
+} sino {
+    siuuu("Sigue entrenando");
+}</code></pre>
+        <p><code>si</code> selects a branch; <code>sino</code> is optional. The condition must be a boolean. <code>entrena</code> repeats while its boolean condition is true.</p>
+        <pre class="code-block"><code>temporada rival en ["Porto", "Juventus", "Barcelona"] {
+    siuuu(rival);
+}</code></pre>
+        <p><code>temporada</code> iterates lists in order, text as one-scalar strings, and dictionaries by insertion-ordered keys. It captures a shallow snapshot at loop entry. <code>vestuario;</code> and <code>siguiente;</code> break or continue the nearest loop; using either outside a loop is a resolver error.</p>
+      </section>
+
+      <section class="section-rule" id="functions">
+        <h2>Functions create lexical scopes</h2>
+        <pre class="code-block"><code>jugada rematar(potencia, precision) {
+    devuelve potencia * precision;
+}</code></pre>
+        <p>Functions are first-class lexical closures and support recursion. Arguments evaluate from left to right; user-defined functions require their declared number of arguments (documented native functions may be variadic). Reaching the end of a function or using <code>devuelve;</code> produces <code>nada</code>.</p>
+        <p>Blocks create scopes. Parameters are mutable local bindings; reassignment does not rebind the caller's variable, while a passed list or dictionary keeps its reference identity. At module scope, functions initialize before constants; constants then initialize in source order.</p>
+      </section>
+
+      <section class="section-rule" id="collections">
+        <h2>Collections are mutable references</h2>
+        <pre class="code-block"><code>cantera plantilla = ["Cristiano", "Benzema", "Bale"];
+plantilla[1] = "Marcelo";
+convoca(plantilla, "Modrić");
+
+cantera jugador = {"nombre": "Cristiano", "goles": 3};
+jugador["goles"] = 4;
+jugador["club"] = "Madrid";</code></pre>
+        <ul>
+          <li>List indexes start at 0; negative indexes are unsupported. Assigning at the list length does not append—use <code>convoca</code>.</li>
+          <li>Dictionary keys are text and preserve insertion order. Bracket access reads and updates fields; missing keys raise <code>ClaveAusente</code>.</li>
+          <li><code>palmares</code> returns the length of text, a list, or a dictionary. <code>consulta</code> supplies a dictionary fallback, including when the stored value is <code>nada</code>.</li>
+          <li>Text cannot be assigned by index. Text indexing counts Unicode scalar values, not bytes or grapheme clusters.</li>
+        </ul>
+      </section>
+
+      <section class="section-rule">
+        <h2>Continue with the contract</h2>
+        <p>This tour is a guide, not a replacement for exact language rules. Use the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">full language reference</a> for grammar, diagnostics, module loading, recovery, and every standard-library contract. For the project status and reading path, see <a href="getting-started.html">Getting started</a>.</p>
+      </section>
+    </main>
+    <aside class="page-toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <nav>
+        <a href="#program">Program structure</a>
+        <a href="#values">Values</a>
+        <a href="#bindings">Bindings</a>
+        <a href="#operators">Operators</a>
+        <a href="#control-flow">Control flow</a>
+        <a href="#functions">Functions</a>
+        <a href="#collections">Collections</a>
+      </nav>
+    </aside>
+  </div>
+  <footer class="site-footer">
+    <p>CR7Script is an unofficial fan-inspired project. No endorsement by Cristiano Ronaldo, Real Madrid, UEFA, or other organizations is asserted.</p>
+    <p><a href="index.html">Documentation home</a> · <a href="getting-started.html">Getting started</a></p>
+  </footer>
+</body>
+</html>
