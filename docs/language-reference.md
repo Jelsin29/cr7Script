@@ -1,10 +1,10 @@
 # CR7Script Language Reference
 
-> **Status: proposed design — not implemented.** This document describes a draft for CR7Script 0.1. Examples show intended behavior; no interpreter, compiler, or CLI currently executes them.
+> **Status: approved design; implementation in progress.** The owner-approved 0.1 decisions are summarized below. The lexer is the first implementation slice; no interpreter or CLI executes the examples yet.
 >
 > **Documentation language:** English · **Language vocabulary:** Spanish-first · **Identity:** a small scripting language inspired by Cristiano Ronaldo, especially his Real Madrid era.
 
-CR7Script gives programming concepts a football identity while keeping their behavior predictable. The draft proposes a tree-walking scripting language with a Go implementation; Go is the implementation language, not CR7Script's syntax or a promise to transpile to Go. Some design decisions remain open; see [Open questions](#open-questions-before-implementation).
+CR7Script gives programming concepts a football identity while keeping their behavior predictable. The approved 0.1 baseline specifies a tree-walking scripting language implemented in Go 1.27 or newer; Go is not CR7Script's syntax or a promise to transpile to Go. The lexer/frontend is the first implementation slice; examples remain specifications until an interpreter verifies them.
 
 ## Quick example
 
@@ -101,7 +101,7 @@ User-supplied lead: [Instagram reel DVWnG4qDYqH](https://www.instagram.com/reel/
 | Mutation | Explicit assignment and named collection operations |
 | Source | UTF-8 `.cr7` files |
 | Statements | Simple statements require semicolons; blocks use braces |
-| Dependencies | Go standard library and local modules only, if Go is confirmed |
+| Dependencies | Go 1.27 or newer; standard library and local modules only |
 | Initial tooling | Runner, syntax checker, REPL, version and help commands (all proposed) |
 
 **Deferred from 0.1:** classes, inheritance, operator overloading, macros, generics, threads, network access, package installation, JIT, native code generation, and self-hosting. This runtime is learning-oriented and is **not a security sandbox**.
@@ -139,7 +139,7 @@ nada
 {"nombre": "Cristiano", "dorsal": 7}
 ```
 
-Numbers follow `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`; minus is unary. Hex, binary, numeric separators, and `.5` are unsupported. Strings use double quotes and recognize `\"`, `\\`, `\n`, `\r`, `\t`, and `\uXXXX`. Unicode escapes must denote scalar values; surrogate escapes, unknown escapes, and raw line breaks are lexical errors.
+Numbers follow `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`; minus is unary. Hex, binary, numeric separators, and `.5` are unsupported. A syntactically valid literal that is non-finite (for example, `1e999`) is rejected during front-end analysis with `NumeroNoFinito` at the literal's source location, before program execution. Strings use double quotes and recognize `\"`, `\\`, `\n`, `\r`, `\t`, and `\uXXXX`. Unicode escapes must denote scalar values; surrogate escapes, unknown escapes, and raw line breaks are lexical errors.
 
 ## Keywords
 
@@ -201,10 +201,11 @@ leyenda dorsal = 7;
 
 - Every declaration needs an initializer. Assignment updates the nearest visible binding; it never creates a variable.
 - Same-scope redeclaration is an error; nested scopes may shadow outer names.
-- Blocks create scopes. Function parameters live in the function body's outer scope.
+- Blocks create scopes. Function parameters live in the function body's outer scope and are mutable bindings; reassigning a parameter changes the local binding only, while passed collection references retain identity.
+- Names declared with `jugada` are mutable function bindings and may be reassigned.
 - `leyenda` prevents rebinding, not mutation of a referenced collection.
 - Collections are references; assignment does not copy them.
-- Names exist lexically throughout their block but cannot be read before initialization. A reference to a later local must not fall back to an outer binding.
+- The resolver reports an unknown lexical name as `NombreNoDefinido` and a read before initialization as `NombreSinInicializar`. A later local declaration shadows outer names from its lexical scope, so an early read cannot fall back to an outer binding.
 - Core prelude names cannot be redeclared. Import aliases are immutable module-level bindings.
 
 ```cr7
@@ -249,7 +250,7 @@ si goles > 3 {
 }
 ```
 
-`entrena condition { ... }` repeats while the condition is true. `temporada name en iterable { ... }` iterates lists in order, text as one-scalar strings, and dictionaries by insertion-ordered keys. Iteration captures a shallow snapshot at loop entry. Each iteration creates a fresh mutable loop binding and body scope; closures capture that iteration's binding. Other values are not iterable. `vestuario;` and `siguiente;` outside a loop in the same function are static errors.
+`entrena condition { ... }` repeats while the condition is true. `temporada name en iterable { ... }` iterates lists in order, text as one-scalar strings, and dictionaries by insertion-ordered keys. Iteration captures a shallow snapshot at loop entry. Each iteration creates a fresh mutable loop binding and body scope; closures capture that iteration's binding. Other values are not iterable. `vestuario;` and `siguiente;` outside a loop in the same function raise the static error `ControlFueraDeBucle`.
 
 ```cr7
 temporada rival en ["Porto", "Juventus", "Barcelona"] {
@@ -276,7 +277,7 @@ jugada comandante() {
 }
 ```
 
-Functions are first-class lexical closures. Arguments evaluate left to right and pass by value; collection references retain identity. Calls require exact arity; user-defined variadic parameters and overloads are absent in 0.1. Recursion is supported. Reaching the end or using `devuelve;` returns `nada`. Nested functions initialize when execution reaches their declaration. Module-level functions initialize before constants, allowing forward calls among top-level functions. Duplicate parameter names and `devuelve` outside a function are errors.
+Functions are first-class lexical closures. Arguments evaluate left to right and pass by value; collection references retain identity. Calls require exact arity; user-defined variadic parameters and overloads are absent in 0.1. Recursion is supported. Reaching the end or using `devuelve;` returns `nada`. Nested functions initialize when execution reaches their declaration. Module-level functions initialize before constants, allowing forward calls among top-level functions. Module-level `leyenda` initializers then evaluate in source order; the resolver reports a read of a later constant as `NombreSinInicializar`. Duplicate parameter names raise `DeclaracionDuplicada`; `devuelve` outside a function raises `DevolucionFueraDeFuncion`.
 
 A runnable entry module declares exactly one top-level `jugada comandante()` with no parameters. A runner invokes it once after module initialization. It must return `nada` or an integer exit code from 0 through 125; other results raise `SalidaInvalida`. Imported modules need no entry point and do not auto-run an exported `comandante`. The REPL has no required or automatic entry call.
 
@@ -329,7 +330,9 @@ Errors expose read-only `.codigo`, `.mensaje`, `.archivo`, `.linea`, and `.colum
 | `NombreNoDefinido` | Unknown identifier |
 | `NombreSinInicializar` | Binding read too early |
 | `DeclaracionDuplicada` | Duplicate name in scope |
-| `ReasignacionDeLeyenda` | Constant reassignment |
+| `DevolucionFueraDeFuncion` | Return outside a function |
+| `ControlFueraDeBucle` | Break or continue outside a loop |
+| `ReasignacionDeLeyenda` | Reassignment of a constant or read-only import alias |
 | `TipoIncorrecto` | Invalid operand or argument type |
 | `AridadIncorrecta` | Wrong number of arguments |
 | `DivisionPorCero` | Zero divisor |
@@ -486,14 +489,14 @@ pair          = STRING, ":", expression ;
 
 Only identifiers and final index-access expressions are valid assignment targets. Dot assignment is rejected. A `{` at statement start is a block; parenthesize a standalone dictionary expression. Imports are not allowed in blocks. A REPL accepts block declarations and standalone expressions without a semicolon for value echo.
 
-## Open questions before implementation
+## Owner-approved implementation decisions
 
-The draft needs owner decisions or explicit accepted resolutions for these items; do not silently choose during implementation:
+These decisions resolve the draft's previously open questions and are part of the approved 0.1 baseline:
 
-1. Confirm Go as the implementation language and choose its minimum supported version.
-2. Define module constant initialization order and behavior when an initializer reads a later constant.
-3. Define how non-finite numeric literals (for example `1e999`) are diagnosed and at which phase.
-4. Define whether `NombreNoDefinido` and `NombreSinInicializar` are resolver or runtime errors, and the exact guarantees of `check`.
+1. **Host:** Go is confirmed, with Go 1.27 as the minimum supported version.
+2. **Module constants:** Initialize top-level functions first, then evaluate module constants in source order. A reference to a later constant is a resolver error, `NombreSinInicializar`.
+3. **Non-finite literals:** Reject a non-finite numeric literal such as `1e999` during front-end analysis as `NumeroNoFinito`, before executing program code, at the literal's source location.
+4. **Names and `check`:** The resolver reports unknown names as `NombreNoDefinido` and reads before initialization as `NombreSinInicializar`. `check` validates syntax and lexical bindings without executing the program.
 
 ## Inspiration and attribution
 
