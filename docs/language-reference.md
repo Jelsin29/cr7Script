@@ -201,7 +201,8 @@ leyenda dorsal = 7;
 
 - Every declaration needs an initializer. Assignment updates the nearest visible binding; it never creates a variable.
 - Same-scope redeclaration is an error; nested scopes may shadow outer names.
-- Blocks create scopes. Function parameters live in the function body's outer scope.
+- Blocks create scopes. Function parameters live in the function body's outer scope and are mutable bindings; reassigning a parameter changes the local binding only, while passed collection references retain identity.
+- Names declared with `jugada` are mutable function bindings and may be reassigned.
 - `leyenda` prevents rebinding, not mutation of a referenced collection.
 - Collections are references; assignment does not copy them.
 - The resolver reports an unknown lexical name as `NombreNoDefinido` and a read before initialization as `NombreSinInicializar`. A later local declaration shadows outer names from its lexical scope, so an early read cannot fall back to an outer binding.
@@ -249,7 +250,7 @@ si goles > 3 {
 }
 ```
 
-`entrena condition { ... }` repeats while the condition is true. `temporada name en iterable { ... }` iterates lists in order, text as one-scalar strings, and dictionaries by insertion-ordered keys. Iteration captures a shallow snapshot at loop entry. Each iteration creates a fresh mutable loop binding and body scope; closures capture that iteration's binding. Other values are not iterable. `vestuario;` and `siguiente;` outside a loop in the same function are static errors.
+`entrena condition { ... }` repeats while the condition is true. `temporada name en iterable { ... }` iterates lists in order, text as one-scalar strings, and dictionaries by insertion-ordered keys. Iteration captures a shallow snapshot at loop entry. Each iteration creates a fresh mutable loop binding and body scope; closures capture that iteration's binding. Other values are not iterable. `vestuario;` and `siguiente;` outside a loop in the same function raise the static error `ControlFueraDeBucle`.
 
 ```cr7
 temporada rival en ["Porto", "Juventus", "Barcelona"] {
@@ -276,7 +277,7 @@ jugada comandante() {
 }
 ```
 
-Functions are first-class lexical closures. Arguments evaluate left to right and pass by value; collection references retain identity. Calls require exact arity; user-defined variadic parameters and overloads are absent in 0.1. Recursion is supported. Reaching the end or using `devuelve;` returns `nada`. Nested functions initialize when execution reaches their declaration. Module-level functions initialize before constants, allowing forward calls among top-level functions. Module-level `leyenda` initializers then evaluate in source order; the resolver reports a read of a later constant as `NombreSinInicializar`. Duplicate parameter names and `devuelve` outside a function are errors.
+Functions are first-class lexical closures. Arguments evaluate left to right and pass by value; collection references retain identity. Calls require exact arity; user-defined variadic parameters and overloads are absent in 0.1. Recursion is supported. Reaching the end or using `devuelve;` returns `nada`. Nested functions initialize when execution reaches their declaration. Module-level functions initialize before constants, allowing forward calls among top-level functions. Module-level `leyenda` initializers then evaluate in source order; the resolver reports a read of a later constant as `NombreSinInicializar`. Duplicate parameter names raise `DeclaracionDuplicada`; `devuelve` outside a function raises `DevolucionFueraDeFuncion`.
 
 A runnable entry module declares exactly one top-level `jugada comandante()` with no parameters. A runner invokes it once after module initialization. It must return `nada` or an integer exit code from 0 through 125; other results raise `SalidaInvalida`. Imported modules need no entry point and do not auto-run an exported `comandante`. The REPL has no required or automatic entry call.
 
@@ -329,7 +330,9 @@ Errors expose read-only `.codigo`, `.mensaje`, `.archivo`, `.linea`, and `.colum
 | `NombreNoDefinido` | Unknown identifier |
 | `NombreSinInicializar` | Binding read too early |
 | `DeclaracionDuplicada` | Duplicate name in scope |
-| `ReasignacionDeLeyenda` | Constant reassignment |
+| `DevolucionFueraDeFuncion` | Return outside a function |
+| `ControlFueraDeBucle` | Break or continue outside a loop |
+| `ReasignacionDeLeyenda` | Reassignment of a constant or read-only import alias |
 | `TipoIncorrecto` | Invalid operand or argument type |
 | `AridadIncorrecta` | Wrong number of arguments |
 | `DivisionPorCero` | Zero divisor |
