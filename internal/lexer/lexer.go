@@ -1,6 +1,12 @@
 package lexer
 
-import "unicode/utf8"
+import (
+	"errors"
+	"math"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
 
 const syntaxErrorCode = "SintaxisInvalida"
 
@@ -31,7 +37,11 @@ var keywords = map[string]Kind{
 
 // Scan tokenizes source and appends one EOF token on success.
 func Scan(source string) ([]Token, error) {
-	s := scanner{source: source, line: 1, column: 1}
+	s := scanner{
+		source: source,
+		line:   1,
+		column: 1,
+	}
 	return s.scanTokens()
 }
 
@@ -90,7 +100,18 @@ func (s *scanner) scanToken() error {
 	case '*':
 		s.addToken(Star, nil)
 	case '/':
+		if s.match('/') {
+			for !s.atEnd() && s.peek() != '\n' {
+				s.advance()
+			}
+			return nil
+		}
+		if s.match('*') {
+			return s.blockComment()
+		}
 		s.addToken(Slash, nil)
+	case '"':
+		return s.stringLiteral()
 	case '%':
 		s.addToken(Percent, nil)
 	case '=':
@@ -121,7 +142,7 @@ func (s *scanner) scanToken() error {
 		case isASCIILetter(character) || character == '_':
 			s.identifier()
 		case isASCIIDigit(character):
-			s.number()
+			return s.number()
 		default:
 			return s.diagnostic("unexpected character", s.startAt)
 		}
@@ -141,7 +162,7 @@ func (s *scanner) identifier() {
 	s.addToken(kind, nil)
 }
 
-func (s *scanner) number() {
+func (s *scanner) number() error {
 	for isASCIIDigit(s.peek()) {
 		s.advance()
 	}
@@ -160,7 +181,108 @@ func (s *scanner) number() {
 			s.advance()
 		}
 	}
-	s.addToken(Number, nil)
+
+	lexeme := s.source[s.start:s.current]
+	value, err := strconv.ParseFloat(lexeme, 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		return s.diagnostic("invalid numeric literal", s.startAt)
+	}
+	if math.IsInf(value, 0) || math.IsNaN(value) {
+		return &Diagnostic{Code: "NumeroNoFinito", Message: "numeric literal is not finite", Position: s.startAt}
+	}
+	s.addToken(Number, value)
+	return nil
+}
+
+func (s *scanner) stringLiteral() error {
+	var value strings.Builder
+	for !s.atEnd() {
+		position := s.position()
+		character := s.advance()
+		switch character {
+		case '"':
+			s.addToken(StringLiteral, value.String())
+			return nil
+		case '\n', '\r':
+			return s.diagnostic("raw line breaks are not allowed in strings", position)
+		case '\\':
+			if s.atEnd() {
+				return s.diagnostic("unterminated string escape", position)
+			}
+			if err := s.stringEscape(&value, position); err != nil {
+				return err
+			}
+		default:
+			value.WriteRune(character)
+		}
+	}
+	return s.diagnostic("unterminated string", s.startAt)
+}
+
+func (s *scanner) stringEscape(value *strings.Builder, position Position) error {
+	character := s.advance()
+	switch character {
+	case '"', '\\':
+		value.WriteRune(character)
+	case 'n':
+		value.WriteByte('\n')
+	case 'r':
+		value.WriteByte('\r')
+	case 't':
+		value.WriteByte('\t')
+	case 'u':
+		codePoint, err := s.unicodeEscape(position)
+		if err != nil {
+			return err
+		}
+		value.WriteRune(codePoint)
+	default:
+		return s.diagnostic("unknown string escape", position)
+	}
+	return nil
+}
+
+func (s *scanner) unicodeEscape(position Position) (rune, error) {
+	var codePoint rune
+	for range 4 {
+		if s.atEnd() {
+			return 0, s.diagnostic("incomplete Unicode escape", position)
+		}
+		digit, ok := hexDigit(s.advance())
+		if !ok {
+			return 0, s.diagnostic("invalid Unicode escape", position)
+		}
+		codePoint = codePoint*16 + rune(digit)
+	}
+	if codePoint >= 0xD800 && codePoint <= 0xDFFF {
+		return 0, s.diagnostic("Unicode escape is not a scalar value", position)
+	}
+	return codePoint, nil
+}
+
+func (s *scanner) blockComment() error {
+	for !s.atEnd() {
+		if s.peek() == '*' && s.peekNext() == '/' {
+			s.advance()
+			s.advance()
+			return nil
+		}
+		s.advance()
+	}
+	return s.diagnostic("unterminated block comment", s.startAt)
+}
+
+func hexDigit(character rune) (uint8, bool) {
+	switch {
+	case character >= '0' && character <= '9':
+		return uint8(character - '0'), true
+	case character >= 'a' && character <= 'f':
+		return uint8(character-'a') + 10, true
+	case character >= 'A' && character <= 'F':
+		return uint8(character-'A') + 10, true
+	default:
+		return 0, false
+	}
 }
 
 func (s *scanner) validExponent() bool {
