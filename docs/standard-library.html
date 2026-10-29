@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CR7Script standard-library guide: all 17 prelude functions, four registered modules, exact quote exports, and approved 0.1 behavior.">
+  <title>Standard library · CR7Script</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="index.html">CR7Script <span>/ Docs</span></a>
+    <nav class="primary-nav" aria-label="Primary navigation">
+      <a href="getting-started.html">Getting started</a>
+      <a href="language-tour.html">Language tour</a>
+      <a href="modules-and-errors.html">Modules &amp; errors</a>
+      <a href="standard-library.html" aria-current="page">Standard library</a>
+      <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full reference</a>
+    </nav>
+  </header>
+  <div class="page-grid">
+    <aside class="sidebar" aria-label="Documentation">
+      <h2>Documentation</h2>
+      <nav aria-label="Documentation sections">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="language-tour.html">Language tour</a>
+        <a href="modules-and-errors.html">Modules &amp; errors</a>
+        <a href="standard-library.html" aria-current="page">Standard library</a>
+        <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full language reference</a>
+      </nav>
+      <h2>On this page</h2>
+      <nav aria-label="On this page">
+        <a href="#prelude">Core prelude</a>
+        <a href="#display">Display and conversion</a>
+        <a href="#modules">Registered modules</a>
+        <a href="#mr-champions">mr_champions</a>
+        <a href="#relato">relato</a>
+        <a href="#marcador">marcador</a>
+        <a href="#quotes">rueda_de_prensa</a>
+      </nav>
+    </aside>
+    <main class="content" id="main-content">
+      <span class="eyebrow">Standard library · approved 0.1 contract</span>
+      <h1>Seventeen core functions. Four explicit modules.</h1>
+      <p class="lead">The prelude is available without imports. Statistics, text helpers, numeric helpers, and sourced quote constants live in registered, read-only module namespaces.</p>
+      <div class="notice" role="note"><strong>Implemented core, not a runnable CLI guide.</strong> These native functions and modules exist in the Go interpreter core. The approved <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">language reference</a> remains authoritative; a supported runner, checker, and REPL are not available yet. All snippets on this page are illustrative and have not been executed as CR7Script programs.</div>
+
+      <section class="section-rule" id="prelude">
+        <h2>Core prelude: complete function surface</h2>
+        <p>Signatures below describe positional arguments, not declaration syntax or type annotations. Only <code>siuuu</code> is variadic; every other function requires exactly the displayed number of arguments or raises <code>AridadIncorrecta</code>. Wrong argument types raise <code>TipoIncorrecto</code>. There are no implicit conversions, overloads, or spelling aliases, and core prelude names cannot be redeclared.</p>
+        <table class="data-table">
+          <thead><tr><th scope="col">Signature</th><th scope="col">Result and contract</th></tr></thead>
+          <tbody>
+            <tr><td><code>siuuu(value...)</code></td><td>Display each value, separated by one space, then print a newline. Zero arguments prints a blank line. Returns <code>nada</code>; output failures raise <code>EntradaSalida</code>.</td></tr>
+            <tr><td><code>entrevista(prompt)</code></td><td>Requires text. Prints the prompt without a newline, flushes, then reads one line. Strips one LF or CRLF, preserves other whitespace, and returns text. A final unterminated line is returned before subsequent EOF returns <code>nada</code>. An empty line is <code>""</code>, not EOF. Write, flush, or read failures raise <code>EntradaSalida</code>.</td></tr>
+            <tr><td><code>hala_madrid()</code></td><td>Prints <code>Uno, dos, tres... ¡Hala Madrid!</code> followed by a newline. Returns <code>nada</code>; output failures raise <code>EntradaSalida</code>. This greeting is an adaptation, not the verbatim Q7 quote.</td></tr>
+            <tr><td><code>el_bicho(text)</code></td><td>Returns locale-independent Unicode simple uppercase text, not locale-specific casing or multi-character expansion.</td></tr>
+            <tr><td><code>texto(value)</code></td><td>Returns the stable display representation as text; see <a href="#display">display rules</a>.</td></tr>
+            <tr><td><code>numero(text)</code></td><td>Explicit signed decimal conversion with surrounding ASCII whitespace allowed. Invalid syntax raises <code>ConversionInvalida</code>; a non-finite converted result raises <code>NumeroNoFinito</code>. See <a href="#display">conversion details</a>.</td></tr>
+            <tr><td><code>tipo(value)</code></td><td>Returns a text label: <code>numero</code>, <code>texto</code>, <code>booleano</code>, <code>nulo</code>, <code>lista</code>, <code>diccionario</code>, <code>funcion</code>, <code>modulo</code>, or <code>error</code>.</td></tr>
+            <tr><td><code>palmares(value)</code></td><td>Returns list length, dictionary key count, or text length as a number. Text counts Unicode scalar values, not UTF-8 bytes or grapheme clusters.</td></tr>
+            <tr><td><code>calma(ms)</code></td><td>Blocks at least the given milliseconds, barring interruption, then returns <code>nada</code>. Requires a non-negative safe integer; negative, fractional, or unsafe values raise <code>TipoIncorrecto</code>.</td></tr>
+            <tr><td><code>rango(start,end)</code></td><td>Returns a new list with inclusive start, exclusive end, and step 1. Both bounds must be safe integers with <code>start &lt;= end</code>; otherwise raises <code>RangoInvalido</code> (non-numeric arguments raise <code>TipoIncorrecto</code>). Equal bounds return an empty list. Large ranges allocate memory.</td></tr>
+            <tr><td><code>chilena(list)</code></td><td>Returns a new shallow reversed list. The original is unchanged; nested collection references retain identity. An empty list yields a new empty list.</td></tr>
+            <tr><td><code>hat_trick(value)</code></td><td>Returns a new <code>[value, value, value]</code>. Reference values are repeated, not cloned.</td></tr>
+            <tr><td><code>convoca(list,value)</code></td><td>Appends the value in place and returns <code>nada</code>. Aliases observe the mutation, even when the list is held by a <code>leyenda</code> binding.</td></tr>
+            <tr><td><code>banquillo(list)</code></td><td>Removes and returns the last item in place. An empty list raises <code>ListaVacia</code>.</td></tr>
+            <tr><td><code>consulta(dict,key,fallback)</code></td><td>Requires a dictionary and text key. Returns the stored value when present, including <code>nada</code>; otherwise returns the fallback. Does not insert the key.</td></tr>
+            <tr><td><code>contiene(collection,item)</code></td><td>Returns a boolean: list membership using language equality, dictionary key presence (text item required), or text substring presence (text item required). Scalar equality compares values; collections, functions, modules, and errors compare by identity. An empty substring is present in any text.</td></tr>
+            <tr><td><code>exige(condition,message)</code></td><td>Requires a boolean and text message. <code>gol</code> returns <code>nada</code>; <code>fuera</code> raises <code>FaltaDelUsuario</code> with the supplied message. Does not coerce truthiness.</td></tr>
+          </tbody>
+        </table>
+        <p>A safe integer has no fractional part and lies between <code>-9007199254740991</code> and <code>9007199254740991</code> inclusive. Numbers use finite IEEE-754 binary64; arithmetic is not exact financial arithmetic.</p>
+        <pre class="code-block"><code>// Illustrative: shallow copies and shared references.
+jugada comandante() {
+    leyenda jugador = {"goles": 7};
+    cantera equipo = hat_trick(jugador);
+    jugador["goles"] = 8;
+    exige(contiene(equipo, jugador), "Shared player expected");
+    siuuu(chilena(rango(1, 4)));
+}</code></pre>
+      </section>
+
+      <section class="section-rule" id="display">
+        <h2>Display is stable; conversion is explicit</h2>
+        <p><code>siuuu</code> and <code>texto</code> use the same deterministic display rules:</p>
+        <ul>
+          <li>Booleans display as <code>gol</code>/<code>fuera</code>, null as <code>nada</code>, and top-level text without quotes.</li>
+          <li>Whole-valued numbers omit <code>.0</code>; negative zero displays as <code>0</code>. Non-integral numbers use shortest round-trip decimal notation, with lowercase <code>e</code> when needed.</li>
+          <li>Lists and dictionaries use brackets and comma-space separators. Text elements are escaped and quoted; dictionaries retain insertion order.</li>
+          <li>A cycle on the current traversal stack displays as <code>&lt;ciclo&gt;</code>. Opaque values display as <code>&lt;funcion&gt;</code>, <code>&lt;modulo&gt;</code>, or <code>&lt;error CODE&gt;</code>.</li>
+        </ul>
+        <p><code>numero</code> accepts the decimal grammar <code>[+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?</code>, trimming only surrounding ASCII whitespace. Thus signed decimals and exponents are allowed, while <code>.5</code>, <code>1.</code>, <code>0x10</code>, numeric separators, <code>NaN</code>, and <code>Inf</code> are not. Unicode whitespace is not silently trimmed. The library tests distinguish invalid conversion from overflow such as <code>"1e999"</code>, which raises <code>NumeroNoFinito</code>.</p>
+      </section>
+
+      <section class="section-rule" id="modules">
+        <h2>Import one of four registered modules</h2>
+        <p>The exact registered names are <code>mr_champions</code>, <code>relato</code>, <code>marcador</code>, and <code>rueda_de_prensa</code>. Imports precede other module declarations. Read exports through an alias; the alias is your choice, while export names are exact and case-sensitive. Module lookup does not download packages, perform resolution I/O, or print quotes. These modules expose no filesystem or network functions.</p>
+        <pre class="code-block"><code>// Illustrative imports and calls; not an executed program.
+fichar "mr_champions" como champions;
+fichar "relato" como relato;
+fichar "marcador" como marcador;
+fichar "rueda_de_prensa" como frases;
+
+jugada comandante() {
+    siuuu(champions.soy_el_mejor([7, 10, 17]));
+    siuuu(relato.une(["Hala", "Madrid"], " "));
+    siuuu(marcador.redondea(-2.5));
+    siuuu(frases.HALA_MADRID);
+}</code></pre>
+        <p>All module functions have fixed arity and strict argument types, using <code>AridadIncorrecta</code> and <code>TipoIncorrecto</code> as above. Namespaces are read-only. See <a href="modules-and-errors.html">modules and errors</a> for initialization and recovery rules: runtime recovery neither rolls back effects nor retries automatically.</p>
+      </section>
+
+      <section class="section-rule" id="mr-champions">
+        <h2><code>mr_champions</code>: five statistics exports</h2>
+        <p>The first four functions require a list containing only numbers. Arithmetic must remain finite or raises <code>NumeroNoFinito</code>. Sums are evaluated left to right; binary64 rounding and intermediate overflow also matter for the mean.</p>
+        <table class="data-table">
+          <thead><tr><th scope="col">Export signature</th><th scope="col">Contract</th></tr></thead>
+          <tbody>
+            <tr><td><code>soy_el_mejor(numbers)</code></td><td>Return the maximum number. Empty list raises <code>ListaVacia</code>.</td></tr>
+            <tr><td><code>minimo(numbers)</code></td><td>Return the minimum number. Empty list raises <code>ListaVacia</code>.</td></tr>
+            <tr><td><code>goles_totales(numbers)</code></td><td>Return the left-to-right sum. Empty list returns <code>0</code>.</td></tr>
+            <tr><td><code>promedio(numbers)</code></td><td>Return the arithmetic mean. Empty list raises <code>ListaVacia</code>.</td></tr>
+            <tr><td><code>pichichi(players)</code></td><td>Require a non-empty list of dictionaries with numeric <code>"goles"</code>. Return the original dictionary with the greatest score; the first wins ties. Empty list raises <code>ListaVacia</code>, missing key raises <code>ClaveAusente</code>, and invalid types raise <code>TipoIncorrecto</code>. Every player is validated, not only the winner; the result is not a copy.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section-rule" id="relato">
+        <h2><code>relato</code>: four text exports</h2>
+        <table class="data-table">
+          <thead><tr><th scope="col">Export signature</th><th scope="col">Contract</th></tr></thead>
+          <tbody>
+            <tr><td><code>minusculas(text)</code></td><td>Return locale-independent Unicode simple lowercase text.</td></tr>
+            <tr><td><code>separa(text, separator)</code></td><td>Return a list of texts, preserving empty fields, including leading/trailing fields. Empty input yields <code>[""]</code> with a valid separator.</td></tr>
+            <tr><td><code>une(texts, separator)</code></td><td>Join a list of texts using the separator; every element must be text. An empty list returns <code>""</code> with a valid separator.</td></tr>
+            <tr><td><code>reemplaza(text, old, replacement)</code></td><td>Return text with all non-overlapping matches replaced. An empty replacement is allowed.</td></tr>
+          </tbody>
+        </table>
+        <p>Separators in <code>separa</code> and <code>une</code>, and the search string <code>old</code> in <code>reemplaza</code>, must be non-empty text; an empty one raises <code>TipoIncorrecto</code>. These operations return new values rather than mutate their arguments.</p>
+      </section>
+
+      <section class="section-rule" id="marcador">
+        <h2><code>marcador</code>: three numeric exports</h2>
+        <table class="data-table">
+          <thead><tr><th scope="col">Export signature</th><th scope="col">Contract</th></tr></thead>
+          <tbody>
+            <tr><td><code>absoluto(number)</code></td><td>Return the absolute value.</td></tr>
+            <tr><td><code>redondea(number)</code></td><td>Round to the nearest integer, with halves away from zero: <code>2.5</code> rounds to <code>3</code> and <code>-2.5</code> to <code>-3</code>.</td></tr>
+            <tr><td><code>potencia(base, exponent)</code></td><td>Return numeric exponentiation. A non-finite result, including NaN from a negative base with a fractional exponent, raises <code>NumeroNoFinito</code>.</td></tr>
+          </tbody>
+        </table>
+        <p>All arguments must be numbers; there is no automatic text-to-number conversion.</p>
+      </section>
+
+      <section class="section-rule" id="quotes">
+        <h2><code>rueda_de_prensa</code>: seven immutable text exports</h2>
+        <p>The following are exact constant values, not functions or language keywords. Typographic outer quotation marks are not stored. Importing the module or reading a constant does not print it; call <code>siuuu</code> explicitly. Export identifiers are CR7Script adaptations, not identifiers used by Ronaldo. Football-inspired programming meanings are invented, and nicknames, gestures, and football terms are not quotations.</p>
+        <div class="notice" role="note"><strong>Provenance boundary.</strong> This page preserves the approved reference's owner-provided Q1–Q7 catalog; its linked material has not been independently re-audited here. Original broadcast/audio pages and contemporaneous reporting with attributed direct speech provide documentary support. An available recording is not evidence that we independently played or transcribed it. Reposts alone do not establish the original occasion or exact wording. Each quotation is a short source excerpt, not a full interview transcript; published punctuation may differ from speech. Source links remain in the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md#verified-spoken-phrase-catalog">reference catalog</a>.</div>
+        <table class="data-table">
+          <thead><tr><th scope="col">ID / export</th><th scope="col">Exact text value</th><th scope="col">Occasion and evidence caveat</th></tr></thead>
+          <tbody>
+            <tr><td>Q1<br><code>RICO_GUAPO_Y_GRAN_JUGADOR</code></td><td><code>soy guapo, rico y un gran jugador</code></td><td>Mixed zone after Dinamo Zagreb–Real Madrid, September 14, 2011; report September 15. Atlas video report published by Público reproduces his explanation for hostile treatment. An excerpt, not the full sentence.</td></tr>
+            <tr><td>Q2<br><code>ESTOY_TRISTE</code></td><td><code>No lo hago cuando estoy triste</code></td><td>Mixed zone after Real Madrid–Granada, September 2, 2012. RTVE contemporaneous coverage quotes why he did not celebrate goals. The surrounding answer describes a professional reason, not a medical condition.</td></tr>
+            <tr><td>Q3<br><code>TODOS_A_MI_NIVEL</code></td><td><code>Si todos estuviesen en mi nivel seríamos los primeros</code></td><td>Post-derby remarks, February 27, 2016. RNE / RTVE audio-page description uses this wording; the headline uses “a mi nivel.” Do not merge the variants. A contested post-match statement, not a general teamwork slogan.</td></tr>
+            <tr><td>Q4<br><code>CINCO_CHAMPIONS</code></td><td><code>Cinco Champions tengo yo y el Atleti, cero</code></td><td>After Atlético–Juventus, February 20, 2019; broadcast February 21. RTVE's original broadcast page identifies the remark. Juventus era, not Real Madrid era. A historical boast, not a live statistics API.</td></tr>
+            <tr><td>Q5<br><code>THE_BEST_SOY_YO</code></td><td><code>el premio The Best fue para el 'the best', que soy yo</code></td><td>Post-award media interview, reported January 10, 2017. AS transcript reproduces his answer after the FIFA award. Attributed published speech, not a newly reviewed original recording.</td></tr>
+            <tr><td>Q6<br><code>SOY_EL_MEJOR</code></td><td><code>Soy el mejor jugador de la historia</code></td><td>France Football interview, reported December 8, 2017, in RTVE coverage. His stated opinion, not a factual ranking established by CR7Script.</td></tr>
+            <tr><td>Q7<br><code>HALA_MADRID</code></td><td><code>Uno, dos, tres: ¡Hala Madrid!</code></td><td>Real Madrid presentation, July 6, 2009, documented on RTVE's event-recording page. A public presentation, not an interview or press conference; retained separately as an existing cultural reference.</td></tr>
+          </tbody>
+        </table>
+        <p>Q7 preserves its colon. The prelude greeting <code>hala_madrid()</code> deliberately uses an ellipsis instead and is not an alternative verbatim transcript. Likewise, <code>mr_champions.soy_el_mejor(numbers)</code> computes a maximum; <code>rueda_de_prensa.SOY_EL_MEJOR</code> merely stores text.</p>
+        <p>The previously considered love/hatred motivational line is excluded from the spoken-phrase catalog: contemporaneous reporting describes an English-language Instagram post, not an interview or press-conference statement. It does not meet this catalog's spoken-context requirement; this makes no claim that he never said it elsewhere.</p>
+        <p>CR7Script is unofficial and fan-inspired. No endorsement by Cristiano Ronaldo, Real Madrid, UEFA, or other organizations is asserted. Names, likenesses, logos, and commercialization may require separate permission; this specification grants no rights.</p>
+      </section>
+
+      <section class="section-rule" id="evidence">
+        <h2>Evidence and next steps</h2>
+        <p>This guide was cross-checked against the approved <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">language reference</a>, <code>internal/stdlib/stdlib.go</code>, <code>internal/stdlib/modules.go</code>, and their contract and boundary tests. Those tests cover arity, errors, mutation and identity, I/O edges, numeric boundaries, and exact quote values. This is source-based documentation, not a claim that the illustrative programs above were executed.</p>
+        <p>Continue with <a href="modules-and-errors.html">modules and runtime recovery</a> or the <a href="language-tour.html">language tour</a>.</p>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">CR7Script · Unofficial fan-inspired language · Approved 0.1 design, implementation in progress.</footer>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Learn how CR7Script modules resolve and initialize, and how runtime errors and recovery work in the approved 0.1 contract.">
+  <title>Modules and errors · CR7Script</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="index.html">CR7Script <span>/ Docs</span></a>
+    <nav class="primary-nav" aria-label="Primary navigation">
+      <a href="getting-started.html">Getting started</a>
+      <a href="language-tour.html">Language tour</a>
+      <a href="modules-and-errors.html" aria-current="page">Modules &amp; errors</a>
+      <a href="standard-library.html">Standard library</a>
+      <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full reference</a>
+    </nav>
+  </header>
+  <div class="page-grid">
+    <aside class="sidebar" aria-label="Documentation">
+      <h2>Documentation</h2>
+      <nav aria-label="Documentation sections">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="language-tour.html">Language tour</a>
+        <a href="modules-and-errors.html" aria-current="page">Modules &amp; errors</a>
+        <a href="standard-library.html">Standard library</a>
+        <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">Full language reference</a>
+      </nav>
+    </aside>
+    <main class="content" id="main-content">
+      <span class="eyebrow">Modules · loading · recovery</span>
+      <h1>Keep modules explicit and failures visible.</h1>
+      <p class="lead">CR7Script imports only local <code>.cr7</code> modules and a fixed standard-library registry. Runtime recovery is deliberately narrow: it handles execution errors but does not undo earlier effects.</p>
+      <div class="notice" role="note">
+        <strong>Contract, not a runnable CLI guide.</strong> Module loading and runtime recovery are implemented in the interpreter core. A supported command-line runner, checker, and REPL are not available, so examples below are illustrative and have not been run as CR7Script programs.
+      </div>
+
+      <section class="section-rule" id="imports">
+        <h2>Import a registered module or a relative file</h2>
+        <pre class="code-block"><code>fichar "mr_champions" como champions;
+fichar "./jugadas.cr7" como tactica;
+
+jugada comandante() {
+    siuuu(champions.soy_el_mejor([7, 10, 17]));
+    siuuu(tactica.rematar(7, 10));
+}</code></pre>
+        <table class="data-table">
+          <thead><tr><th scope="col">Import form</th><th scope="col">Resolution rule</th></tr></thead>
+          <tbody>
+            <tr><td>Registered name</td><td>Only an exact name in the built-in registry resolves; imports do not download packages.</td></tr>
+            <tr><td>Local path</td><td>Must begin with <code>./</code> or <code>../</code>, include <code>.cr7</code>, and is resolved relative to the importing file.</td></tr>
+            <tr><td>Absolute path</td><td>Rejected by the language contract.</td></tr>
+          </tbody>
+        </table>
+        <p>Imports are top-level and must appear before other module declarations. A module may contain imports, function declarations, and initialized <code>leyenda</code> bindings; executable statements and mutable bindings belong inside functions. Top-level functions initialize before constants, which then initialize in source order.</p>
+      </section>
+
+      <section class="section-rule" id="initialization">
+        <h2>Initialization is dependency-ordered and cached</h2>
+        <ul>
+          <li>Local paths are canonicalized through the filesystem, including symlink resolution. The canonical path identifies a local module.</li>
+          <li>Dependencies initialize before their importer. A module initializes once per process and later imports reuse it.</li>
+          <li>Cyclic imports fail with <code>FichajeCircular</code>; the diagnostic includes the import chain.</li>
+          <li>Import aliases are immutable module bindings. A module namespace is read-only, but a list or dictionary exported by reference remains mutable.</li>
+          <li>Importing a standard module does not itself print output or perform module-resolution I/O.</li>
+        </ul>
+        <div class="notice" role="note"><strong>Path resolution is not a sandbox.</strong> It determines which local file is imported; it does not isolate an untrusted program or make executing one safe.</div>
+      </section>
+
+      <section class="section-rule" id="recovery">
+        <h2><code>remontada</code> catches runtime errors only</h2>
+        <pre class="code-block"><code>jugada penalti(acierto) {
+    si no acierto {
+        falta "Penalti fallado";
+    }
+    devuelve "Gol";
+}
+
+jugada comandante() {
+    remontada {
+        siuuu(penalti(fuera));
+    } var error {
+        siuuu("Revision VAR:", error.codigo, error.mensaje);
+    }
+}</code></pre>
+        <ul>
+          <li>A recovery block has exactly one <code>var identifier</code> handler; the catch binding is immutable and scoped to that handler.</li>
+          <li><code>falta</code> with text creates <code>FaltaDelUsuario</code>. With an existing error value, it rethrows that error.</li>
+          <li><code>remontada</code> catches runtime errors from its protected block. It does not catch lexical, parsing, resolver, or module-loading errors.</li>
+          <li>Effects that happened before an error remain. Recovery is not a transaction, rollback, automatic retry, or <code>finally</code> mechanism.</li>
+          <li><code>devuelve</code>, <code>vestuario</code>, and <code>siguiente</code> are control flow, not catchable errors.</li>
+        </ul>
+        <p>Error values expose read-only <code>codigo</code>, <code>mensaje</code>, <code>archivo</code>, <code>linea</code>, and <code>columna</code> fields. Locations are one-based; columns count Unicode scalar values.</p>
+      </section>
+
+      <section class="section-rule" id="diagnostics">
+        <h2>Stable error codes identify failure categories</h2>
+        <p>The 0.1 contract uses stable codes rather than requiring programs to parse human-readable messages. Error codes describe the language contract; runner-specific entry-point and exit-status behavior remains unavailable until the CLI is implemented.</p>
+        <table class="data-table">
+          <thead><tr><th scope="col">Category</th><th scope="col">Code</th><th scope="col">Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>Lexing / parsing</td><td><code>SintaxisInvalida</code></td><td>Invalid source grammar or token.</td></tr>
+            <tr><td>Resolution</td><td><code>NombreNoDefinido</code></td><td>Unknown identifier.</td></tr>
+            <tr><td>Resolution</td><td><code>NombreSinInicializar</code></td><td>Binding read before initialization.</td></tr>
+            <tr><td>Resolution</td><td><code>DeclaracionDuplicada</code></td><td>Duplicate name in a scope.</td></tr>
+            <tr><td>Resolution</td><td><code>DevolucionFueraDeFuncion</code></td><td>Return outside a function.</td></tr>
+            <tr><td>Resolution</td><td><code>ControlFueraDeBucle</code></td><td>Break or continue outside a loop.</td></tr>
+            <tr><td>Resolution / runtime</td><td><code>ReasignacionDeLeyenda</code></td><td>Reassignment of a constant or read-only import alias.</td></tr>
+            <tr><td>Runtime</td><td><code>TipoIncorrecto</code></td><td>Invalid operand or argument type.</td></tr>
+            <tr><td>Runtime</td><td><code>AridadIncorrecta</code></td><td>Wrong number of arguments.</td></tr>
+            <tr><td>Runtime</td><td><code>DivisionPorCero</code></td><td>Zero divisor.</td></tr>
+            <tr><td>Runtime</td><td><code>NumeroNoFinito</code></td><td>Infinite or NaN result.</td></tr>
+            <tr><td>Runtime</td><td><code>ConversionInvalida</code></td><td>Invalid numeric conversion.</td></tr>
+            <tr><td>Runtime</td><td><code>IndiceFueraDeCampo</code></td><td>Invalid collection or text index.</td></tr>
+            <tr><td>Runtime</td><td><code>ClaveAusente</code></td><td>Missing dictionary key.</td></tr>
+            <tr><td>Runtime</td><td><code>ListaVacia</code></td><td>Operation requires an element.</td></tr>
+            <tr><td>Runtime</td><td><code>RangoInvalido</code></td><td>Invalid range bounds or direction.</td></tr>
+            <tr><td>Runtime</td><td><code>EntradaSalida</code></td><td>Input or output failure.</td></tr>
+            <tr><td>Runtime</td><td><code>FaltaDelUsuario</code></td><td>Explicit user-raised failure.</td></tr>
+            <tr><td>Module loading</td><td><code>ModuloNoEncontrado</code></td><td>Unresolvable module.</td></tr>
+            <tr><td>Module loading</td><td><code>FichajeCircular</code></td><td>Cyclic module dependency.</td></tr>
+            <tr><td>Runner contract</td><td><code>ComandanteInvalido</code></td><td>Missing or malformed proposed entry point.</td></tr>
+            <tr><td>Runner contract</td><td><code>SalidaInvalida</code></td><td>Invalid proposed entry return value.</td></tr>
+            <tr><td>Interpreter limit</td><td><code>LimiteDeEjecucion</code></td><td>Interpreter call-depth limit reached.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section-rule">
+        <h2>Continue reading</h2>
+        <p>For syntax and value rules, see the <a href="language-tour.html">language tour</a>. For native functions and modules, read the <a href="standard-library.html">standard-library guide</a>. For the complete grammar, diagnostics, module contract, and recovery semantics, consult the <a href="https://github.com/Jelsin29/cr7Script/blob/main/docs/language-reference.md">authoritative language reference</a>.</p>
+      </section>
+    </main>
+    <aside class="page-toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <nav aria-label="Page sections">
+        <a href="#imports">Import forms</a>
+        <a href="#initialization">Initialization</a>
+        <a href="#recovery">Runtime recovery</a>
+        <a href="#diagnostics">Error codes</a>
+      </nav>
+    </aside>
+  </div>
+  <footer class="site-footer">
+    <p>CR7Script is an unofficial fan-inspired project. No endorsement by Cristiano Ronaldo, Real Madrid, UEFA, or other organizations is asserted.</p>
+    <p><a href="index.html">Documentation home</a> · <a href="language-tour.html">Language tour</a></p>
+  </footer>
+</body>
+</html>
