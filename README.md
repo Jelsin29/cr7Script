@@ -80,7 +80,7 @@ The quote module contains only the documented excerpts and preserves their prove
 - [Architecture](docs/architecture.md) — interpreter pipeline and implementation boundaries.
 - [Roadmap](docs/roadmap.md) — milestones and observed verification evidence.
 
-The static site under `docs/` is compatible with GitHub Pages. This branch has not been published and no repository Pages settings were changed. If the owner later configures a project site for this repository, its expected URL is `https://jelsin29.github.io/cr7Script/`; this README makes no claim about existing Pages settings.
+The CR7Script documentation site is published with GitHub Pages at [jelsin29.github.io/cr7Script](https://jelsin29.github.io/cr7Script/), from the `main` branch's `/docs` folder. The supported command-line runner, syntax checker, and REPL are not available yet.
 
 ## Development checks
 
